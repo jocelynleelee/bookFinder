@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>BookOutlet Deals</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <style>
+        body { font-family: Arial; background: #f5f5f7; margin: 0; }
+
+        .nav {
+            display: flex; gap: 20px; padding: 15px; background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); justify-content: center;
+        }
+        .nav a {
+            text-decoration: none; color: #333; font-weight: bold;
+            padding: 6px 10px; border-radius: 8px; transition: 0.2s;
+        }
+        .nav a:hover { background: #f0f0f0; }
+
+        h1 { text-align: center; padding: 20px; margin: 0; }
+
+        .search-bar { display: flex; justify-content: center; padding: 10px 20px; }
+        .search-bar input {
+            width: 100%; max-width: 480px; padding: 10px 18px; font-size: 15px;
+            border: 1px solid #ddd; border-radius: 24px; outline: none;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.06); transition: border 0.2s;
+        }
+        .search-bar input:focus { border-color: #4a90e2; }
+
+        .toolbar { text-align: center; margin-bottom: 10px; }
+        .toolbar button {
+            padding: 8px 14px; border-radius: 20px; border: 1px solid #ddd;
+            background: white; cursor: pointer; margin: 5px; transition: 0.2s;
+        }
+        .toolbar button:hover { background: #eee; }
+        .toolbar button.active { background: #4a90e2; color: white; border-color: #4a90e2; }
+
+        .bookshelf {
+            display: grid; grid-template-columns: repeat(auto-fill, 200px);
+            justify-content: center; gap: 30px 25px; padding: 20px;
+        }
+        .book { width: 200px; }
+        .book-card {
+            background: white; padding: 10px; border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); transition: 0.2s; text-align: center;
+        }
+        .book-card:hover { transform: translateY(-5px); box-shadow: 0 6px 14px rgba(0,0,0,0.15); }
+        .book-card img { width: 100%; height: 240px; object-fit: cover; border-radius: 8px; }
+        .title { font-size: 14px; margin-top: 10px; font-weight: bold; }
+        .author { font-size: 12px; color: #666; }
+        .price { color: #e53935; font-weight: bold; margin-top: 5px; }
+        .original-price { text-decoration: line-through; color: gray; font-size: 12px; margin-left: 5px; }
+        .inventory { font-size: 12px; margin-top: 5px; }
+        .low { color: red; }
+        .high { color: green; }
+
+        .sparkline-container {
+            margin-top: 10px;
+            height: 60px;
+            position: relative;
+        }
+
+        .sparkline-labels {
+            display: flex;
+            justify-content: space-between;
+            font-size: 10px;
+            color: #999;
+            margin-top: 2px;
+        }
+
+        .history-btn {
+            display: block; margin-top: 8px; padding: 6px; font-size: 12px;
+            background: #4a90e2; color: white; border-radius: 6px; text-decoration: none;
+        }
+        .history-btn:hover { background: #357ab8; }
+
+        .library-badge {
+            display: inline-block; margin-top: 6px;
+            padding: 3px 8px; border-radius: 10px;
+            background: #e8f5e9; color: #2e7d32;
+            font-size: 11px; font-weight: bold;
+        }
+
+        #books-count { text-align: center; font-size: 13px; color: #888; margin-top: 10px; }
+        #load-more-container { text-align: center; padding: 20px; }
+        #load-more {
+            padding: 12px 32px; font-size: 15px; cursor: pointer; border: none;
+            background: #4a90e2; color: white; border-radius: 24px;
+            transition: background 0.2s; display: none;
+        }
+        #load-more:hover { background: #357abd; }
+        #load-more:disabled { background: #aaa; cursor: default; }
+
+        .day-picker-wrapper { position: relative; display: inline-block; margin-top: 6px; }
+        .schedule-btn {
+            padding: 4px 10px; font-size: 11px; border: 1px solid #4a90e2;
+            background: white; color: #4a90e2; border-radius: 12px;
+            cursor: pointer; transition: 0.2s; width: 100%;
+        }
+        .schedule-btn:hover { background: #4a90e2; color: white; }
+        .day-picker {
+            display: none; position: absolute; bottom: 28px; left: 50%;
+            transform: translateX(-50%); background: white;
+            border: 1px solid #ddd; border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100; padding: 6px; min-width: 130px;
+        }
+        .day-picker.open { display: block; }
+        .day-picker button {
+            display: block; width: 100%; text-align: left;
+            padding: 6px 10px; border: none; background: none;
+            cursor: pointer; font-size: 12px; border-radius: 6px;
+        }
+        .day-picker button:hover { background: #f0f0f0; }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <a href="/">📚 Books</a>
+    <a href="/bookdeals">🔥 Deals</a>
+    <a href="/trending">📈 Trending Books</a>
+    <a href="/availability-page">📊 Charts</a>
+    <a href="/schedule">📅 Schedule</a>
+</div>
+
+<h1>🔥 BookOutlet Deals</h1>
+
+<div class="search-bar">
+    <input type="text" id="search-input" placeholder="🔍 Search by title or author..." oninput="onSearch()" />
+</div>
+
+<div class="toolbar">
+    <button id="btn-all" class="active" onclick="setFilter('all')">All Books</button>
+    <button id="btn-low" onclick="setFilter('low')">⚠️ Low Stock</button>
+    <button id="btn-cheap" onclick="setFilter('cheap')">💰 Under $10</button>
+</div>
+
+<div id="books-count"></div>
+<div id="books" class="bookshelf"></div>
+<div id="load-more-container">
+    <button id="load-more" onclick="loadMore()">Load more</button>
+</div>
+
+<script>
+let page = 1;
+let isLoading = false;
+let hasMore = false;
+let total = 0;
+let activeFilter = 'all';
+let allLoaded = [];
+let searchQuery = "";
+let searchTimer = null;
+const sparklineCache = {};
+
+function onSearch() {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(() => {
+        searchQuery = document.getElementById("search-input").value.trim();
+        reset();
+    }, 300);
+}
+
+function setFilter(filter) {
+    activeFilter = filter;
+    document.querySelectorAll(".toolbar button").forEach(b => b.classList.remove("active"));
+    document.getElementById(`btn-${filter}`).classList.add("active");
+
+    const filtered = applyFilter(allLoaded);
+    document.getElementById("books").innerHTML = "";
+    appendBooks(filtered);
+    updateCount();
+
+    if (hasMore && filtered.length < 12) loadMore();
+}
+
+function applyFilter(books) {
+    if (activeFilter === 'low') return books.filter(b => (b.inventory ?? 0) <= 5);
+    if (activeFilter === 'cheap') return books.filter(b => (b.price ?? 0) <= 10);
+    return books;
+}
+
+function reset() {
+    page = 1;
+    allLoaded = [];
+    document.getElementById("books").innerHTML = "";
+    fetchBooks();
+}
+
+function buildUrl() {
+    const params = new URLSearchParams({ page, limit: 48 });
+    if (searchQuery) {
+        params.set("q", searchQuery);
+        params.set("source", "outlet");
+        return `/search?${params.toString()}`;
+    }
+    return `/bookoutlet?${params.toString()}`;
+}
+
+function fetchBooks() {
+    if (isLoading) return;
+    isLoading = true;
+
+    const btn = document.getElementById("load-more");
+    btn.disabled = true;
+
+    fetch(buildUrl())
+        .then(res => res.json())
+        .then(data => {
+            const books = Array.isArray(data) ? data : data.books;
+            hasMore = Array.isArray(data) ? false : data.has_more;
+            total = Array.isArray(data) ? books.length : data.total;
+
+            allLoaded = allLoaded.concat(books);
+            const filtered = applyFilter(books);
+            appendBooks(filtered);
+            updateCount();
+
+            btn.style.display = hasMore ? "inline-block" : "none";
+            btn.disabled = false;
+            isLoading = false;
+        })
+        .catch(() => {
+            isLoading = false;
+            btn.disabled = false;
+        });
+}
+
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+
+// Store book data by isbn to avoid JSON-in-HTML escaping issues
+const bookRegistry = {};
+
+function addToSchedule(day, isbn) {
+    const book = bookRegistry[isbn];
+    if (!book) return;
+    const key = "reading_schedule";
+    let schedule = {};
+    try { schedule = JSON.parse(localStorage.getItem(key)) || {}; } catch {}
+    if (!schedule[day]) schedule[day] = [];
+    if (!schedule[day].find(b => b.isbn === isbn)) {
+        schedule[day].push({ isbn: book.isbn, title: book.title, image_url: book.image_url });
+    }
+    localStorage.setItem(key, JSON.stringify(schedule));
+
+    // Brief visual feedback
+    const btn = document.querySelector(`#picker-${isbn}`).previousElementSibling;
+    const orig = btn.textContent;
+    btn.textContent = "✅ Added!";
+    setTimeout(() => btn.textContent = orig, 1200);
+}
+
+function toggleDayPicker(id) {
+    document.querySelectorAll(".day-picker").forEach(el => {
+        if (el.id !== id) el.classList.remove("open");
+    });
+    document.getElementById(id).classList.toggle("open");
+}
+
+document.addEventListener("click", e => {
+    if (!e.target.closest(".day-picker-wrapper")) {
+        document.querySelectorAll(".day-picker").forEach(el => el.classList.remove("open"));
+    }
+});
+
+function appendBooks(books) {
+    const container = document.getElementById("books");
+    books.forEach(book => {
+        const inventory = book.inventory ?? 0;
+        const price = book.price ?? 0;
+        const original = book.original_price ?? 0;
+        const inventoryClass = inventory <= 5 ? "low" : "high";
+        const inventoryText = inventory <= 5 ? "Low Stock" : "In Stock";
+        const outletUrl = `https://bookoutlet.ca/book/${book.isbn}B`;
+        const historyUrl = `/outlet-history-page?isbn=${book.isbn}`;
+        const canvasId = `spark-${book.isbn}`;
+        const libraryBadge = (book.library_available != null && book.library_available > 0)
+            ? `<span class="library-badge">📚 ${book.library_available} at library</span>`
+            : "";
+        const pickerId = `picker-${book.isbn}`;
+        // Register book data separately to avoid escaping issues in HTML
+        bookRegistry[book.isbn] = { isbn: book.isbn, title: book.title || book.isbn, image_url: book.image_url || "" };
+        const dayOptions = DAYS.map(day =>
+            `<button onclick="addToSchedule('${day}', '${book.isbn}'); toggleDayPicker('${pickerId}')">${day}</button>`
+        ).join("");
+
+        const div = document.createElement("div");
+        div.className = "book";
+        div.innerHTML = `
+            <div class="book-card">
+                <a href="${outletUrl}" target="_blank">
+                    <img src="${book.image_url || ''}" />
+                </a>
+                <div class="title">${book.title || book.isbn}</div>
+                <div class="author">${book.author || ""}</div>
+                <div class="price">$${price}<span class="original-price">$${original}</span></div>
+                <div class="inventory ${inventoryClass}">${inventoryText} (${inventory})</div>
+                ${libraryBadge}
+                <div class="sparkline-container">
+                    <canvas id="${canvasId}"></canvas>
+                </div>
+                <div class="sparkline-labels">
+                    <span>💰 Price</span><span>📦 Stock</span>
+                </div>
+                <div class="day-picker-wrapper">
+                    <button class="schedule-btn" onclick="toggleDayPicker('${pickerId}')">📅 Add to schedule</button>
+                    <div class="day-picker" id="${pickerId}">${dayOptions}</div>
+                </div>
+                <a href="${historyUrl}" class="history-btn">📊 Full History</a>
+            </div>
+        `;
+        container.appendChild(div);
+        loadSparkline(book.isbn, canvasId);
+    });
+}
+
+function loadSparkline(isbn, canvasId) {
+    // Use cache to avoid refetching for the same isbn
+    if (sparklineCache[isbn]) {
+        drawSparkline(canvasId, sparklineCache[isbn]);
+        return;
+    }
+
+    fetch(`/outlet-history/${isbn}`)
+        .then(res => res.json())
+        .then(data => {
+            sparklineCache[isbn] = data;
+            drawSparkline(canvasId, data);
+        })
+        .catch(() => {}); // silently skip if no history
+}
+
+function drawSparkline(canvasId, data) {
+    const canvas = document.getElementById(canvasId);
+    if (!canvas || data.length < 2) return;
+
+    const labels = data.map(d => d.timestamp.slice(0, 10));
+    const prices = data.map(d => d.price);
+    const inventory = data.map(d => d.inventory);
+
+    new Chart(canvas, {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                {
+                    label: "Price",
+                    data: prices,
+                    borderColor: "#e53935",
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    yAxisID: "yPrice",
+                },
+                {
+                    label: "Stock",
+                    data: inventory,
+                    borderColor: "#4a90e2",
+                    borderWidth: 1.5,
+                    pointRadius: 0,
+                    tension: 0.3,
+                    yAxisID: "yStock",
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        label: ctx => ctx.dataset.label === "Price"
+                            ? `$${ctx.parsed.y}`
+                            : `Stock: ${ctx.parsed.y}`
+                    }
+                }
+            },
+            scales: {
+                x: { display: false },
+                yPrice: {
+                    display: false,
+                    position: "left",
+                },
+                yStock: {
+                    display: false,
+                    position: "right",
+                }
+            }
+        }
+    });
+}
+
+function updateCount() {
+    const visible = document.querySelectorAll("#books .book").length;
+    document.getElementById("books-count").textContent =
+        `Showing ${visible} of ${total} books`;
+}
+
+function loadMore() {
+    page++;
+    fetchBooks();
+}
+
+fetchBooks();
+</script>
+
+</body>
+</html>

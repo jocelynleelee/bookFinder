@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Book Detail</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial; background: #f5f5f7; margin: 0; }
+
+        .nav {
+            display: flex; gap: 20px; padding: 15px; background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); justify-content: center;
+        }
+        .nav a {
+            text-decoration: none; color: #333; font-weight: bold;
+            padding: 6px 10px; border-radius: 8px; transition: 0.2s;
+        }
+        .nav a:hover { background: #f0f0f0; }
+
+        .container { max-width: 900px; margin: auto; padding: 20px; }
+
+        /* ── Hero ── */
+        .book-hero {
+            display: flex; gap: 24px; align-items: flex-start;
+            background: white; padding: 20px; border-radius: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .book-hero img {
+            width: 140px; height: 190px; object-fit: cover;
+            border-radius: 10px; flex-shrink: 0;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.15);
+        }
+        .book-meta { flex: 1; }
+        .book-meta h2 { margin: 0 0 4px; font-size: 22px; }
+        .book-meta .author { color: #666; font-size: 14px; margin-bottom: 12px; }
+
+        .badges { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+        .badge {
+            padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: bold;
+        }
+        .badge-pages { background: #e3f2fd; color: #1565c0; }
+        .badge-outlet { background: #fff3e0; color: #e65100; }
+        .badge-library { background: #e8f5e9; color: #2e7d32; }
+
+        .description {
+            font-size: 14px; color: #444; line-height: 1.6;
+            margin-bottom: 14px; max-height: 120px; overflow: hidden;
+            position: relative; transition: max-height 0.3s;
+        }
+        .description.expanded { max-height: 1000px; }
+        .read-more {
+            background: none; border: none; color: #4a90e2;
+            font-size: 13px; cursor: pointer; padding: 0; margin-bottom: 14px;
+        }
+
+        .subjects { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; }
+        .subject-tag {
+            padding: 3px 10px; background: #f0f0f0; border-radius: 12px;
+            font-size: 12px; color: #555;
+        }
+
+        .action-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+        .btn-library {
+            padding: 8px 16px; background: #4a90e2; color: white;
+            border-radius: 20px; text-decoration: none; font-size: 13px;
+            font-weight: bold; transition: 0.2s;
+        }
+        .btn-library:hover { background: #357abd; }
+        .btn-outlet {
+            padding: 8px 16px; background: #ff6f00; color: white;
+            border-radius: 20px; text-decoration: none; font-size: 13px;
+            font-weight: bold; transition: 0.2s;
+        }
+        .btn-outlet:hover { background: #e65100; }
+
+        /* ── Day picker ── */
+        .day-picker-wrapper { position: relative; display: inline-block; }
+        .schedule-btn {
+            padding: 8px 16px; font-size: 13px; font-weight: bold;
+            border: 2px solid #4a90e2; background: white; color: #4a90e2;
+            border-radius: 20px; cursor: pointer; transition: 0.2s;
+        }
+        .schedule-btn:hover { background: #4a90e2; color: white; }
+        .day-picker {
+            display: none; position: absolute; top: 36px; left: 0;
+            background: white; border: 1px solid #ddd; border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 100; padding: 6px; min-width: 140px;
+        }
+        .day-picker.open { display: block; }
+        .day-picker button {
+            display: block; width: 100%; text-align: left;
+            padding: 7px 12px; border: none; background: none;
+            cursor: pointer; font-size: 13px; border-radius: 6px;
+        }
+        .day-picker button:hover { background: #f0f0f0; }
+
+        /* ── Chart ── */
+        .card {
+            background: white; padding: 20px; border-radius: 14px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); margin-bottom: 20px;
+        }
+        .card h3 { margin: 0 0 16px; font-size: 16px; color: #333; }
+
+        .loading { text-align: center; color: #aaa; padding: 40px; }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <a href="/">📚 Books</a>
+    <a href="/bookdeals">🔥 Deals</a>
+    <a href="/trending">📈 Trending</a>
+    <a href="/availability-page">📊 Charts</a>
+    <a href="/schedule">📅 Schedule</a>
+</div>
+
+<div class="container">
+
+    <!-- Hero -->
+    <div class="book-hero">
+        <img id="book-img" src="" alt="cover" />
+        <div class="book-meta">
+            <h2 id="title">Loading...</h2>
+            <div class="author" id="author"></div>
+
+            <div class="badges" id="badges"></div>
+
+            <div class="description" id="description" style="display:none"></div>
+            <button class="read-more" id="read-more" style="display:none" onclick="toggleDesc()">Show more</button>
+
+            <div class="subjects" id="subjects"></div>
+
+            <div class="action-row" id="action-row">
+                <div class="loading">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Availability chart -->
+    <div class="card">
+        <h3>📊 Library Availability</h3>
+        <canvas id="chart"></canvas>
+    </div>
+
+</div>
+
+<script>
+const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
+const book_id = "{{ book_id }}";
+let currentBook = null;
+
+// ── Schedule helpers ──
+function addToSchedule(day) {
+    if (!currentBook) return;
+    const key = "reading_schedule";
+    let schedule = {};
+    try { schedule = JSON.parse(localStorage.getItem(key)) || {}; } catch {}
+    if (!schedule[day]) schedule[day] = [];
+    if (!schedule[day].find(b => b.isbn === currentBook.isbn)) {
+        schedule[day].push({
+            isbn: currentBook.isbn,
+            title: currentBook.title,
+            image_url: currentBook.image,
+        });
+    }
+    localStorage.setItem(key, JSON.stringify(schedule));
+
+    const btn = document.getElementById("schedule-btn");
+    btn.textContent = "✅ Added!";
+    setTimeout(() => btn.textContent = "📅 Add to schedule", 1500);
+    document.getElementById("day-picker").classList.remove("open");
+}
+
+function toggleDayPicker() {
+    document.getElementById("day-picker").classList.toggle("open");
+}
+
+document.addEventListener("click", e => {
+    if (!e.target.closest(".day-picker-wrapper")) {
+        document.getElementById("day-picker")?.classList.remove("open");
+    }
+});
+
+// ── Description toggle ──
+function toggleDesc() {
+    const el = document.getElementById("description");
+    const btn = document.getElementById("read-more");
+    el.classList.toggle("expanded");
+    btn.textContent = el.classList.contains("expanded") ? "Show less" : "Show more";
+}
+
+// ── Render ──
+function renderBook(data) {
+    const book = data.book;
+    const history = data.history;
+    currentBook = book;
+
+    document.title = book.title || "Book Detail";
+    document.getElementById("book-img").src = book.image || "";
+    document.getElementById("title").textContent = book.title || "Unknown";
+
+    if (book.author) {
+        document.getElementById("author").textContent = `by ${book.author}`;
+    }
+
+    // Badges
+    const badgeEl = document.getElementById("badges");
+    if (book.number_of_pages) {
+        badgeEl.innerHTML += `<span class="badge badge-pages">📖 ${book.number_of_pages} pages</span>`;
+    }
+    if (book.outlet_price) {
+        badgeEl.innerHTML += `<span class="badge badge-outlet">💰 $${book.outlet_price} on BookOutlet</span>`;
+    }
+    const latestAvailable = history.length ? history[history.length - 1].available : 0;
+    if (latestAvailable > 0) {
+        badgeEl.innerHTML += `<span class="badge badge-library">📚 ${latestAvailable} available at library</span>`;
+    }
+
+    // Description
+    if (book.description) {
+        const descEl = document.getElementById("description");
+        descEl.textContent = book.description;
+        descEl.style.display = "block";
+        // Only show read more if text is long enough to overflow
+        if (book.description.length > 300) {
+            document.getElementById("read-more").style.display = "inline";
+        } else {
+            descEl.classList.add("expanded");
+        }
+    }
+
+    // Subjects
+    const subjects = book.composite_subjects || [];
+    if (subjects.length) {
+        const subjectsEl = document.getElementById("subjects");
+        subjects.forEach(s => {
+            const parts = s.split("--").map(p => p.trim());
+            parts.forEach(part => {
+                const span = document.createElement("span");
+                span.className = "subject-tag";
+                span.textContent = part;
+                subjectsEl.appendChild(span);
+            });
+        });
+    }
+
+    // Action buttons
+    const actionRow = document.getElementById("action-row");
+    const latestLink = history.length ? history[history.length - 1].link : null;
+    const dayOptions = DAYS.map(d =>
+        `<button onclick="addToSchedule('${d}')">${d}</button>`
+    ).join("");
+
+    actionRow.innerHTML = `
+        ${latestLink ? `<a href="${latestLink}" target="_blank" class="btn-library">📚 View in Library</a>` : ""}
+        ${book.outlet_price ? `<a href="https://bookoutlet.ca/book/${book.isbn}B" target="_blank" class="btn-outlet">💰 Buy on BookOutlet</a>` : ""}
+        <div class="day-picker-wrapper">
+            <button class="schedule-btn" id="schedule-btn" onclick="toggleDayPicker()">📅 Add to schedule</button>
+            <div class="day-picker" id="day-picker">${dayOptions}</div>
+        </div>
+    `;
+
+    // Chart
+    const labels = history.map(d => new Date(d.timestamp).toLocaleString());
+    const available = history.map(d => d.available);
+    const held = history.map(d => d.held);
+    const demand = history.map(d =>
+        (d.held / (d.total || 1)) + (1 - d.available / (d.total || 1))
+    );
+
+    new Chart(document.getElementById("chart"), {
+        type: "line",
+        data: {
+            labels,
+            datasets: [
+                { label: "Available Copies", data: available, borderWidth: 2, tension: 0.3 },
+                { label: "Held Copies", data: held, borderWidth: 2, tension: 0.3 },
+                { label: "Demand Score", data: demand, borderDash: [5, 5], borderWidth: 2, tension: 0.3 },
+            ]
+        },
+        options: {
+            responsive: true,
+            interaction: { mode: "index", intersect: false },
+            plugins: { legend: { position: "top" } },
+            scales: { y: { beginAtZero: true } }
+        }
+    });
+}
+
+// ── Fetch ──
+fetch(`/book_data/${book_id}`)
+    .then(res => res.json())
+    .then(renderBook)
+    .catch(() => {
+        document.getElementById("title").textContent = "Book not found";
+        document.getElementById("action-row").innerHTML = "";
+    });
+</script>
+
+</body>
+</html>

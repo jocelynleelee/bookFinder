@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Trending Books</title>
+
+    <style>
+        body { font-family: Arial; background: #f5f5f7; margin: 0; }
+
+        .nav {
+            display: flex; gap: 20px; padding: 15px; background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); justify-content: center;
+        }
+        .nav a {
+            text-decoration: none; color: #333; font-weight: bold;
+            padding: 6px 10px; border-radius: 8px; transition: 0.2s;
+        }
+        .nav a:hover { background: #f0f0f0; }
+
+        h1 { text-align: center; padding: 20px; margin: 0; }
+        h2 { text-align: center; margin: 20px 0 5px; }
+
+        .subtitle { text-align: center; color: #666; margin-bottom: 10px; }
+
+        .bookshelf {
+            display: grid; grid-template-columns: repeat(auto-fill, 180px);
+            justify-content: center; gap: 25px; padding: 20px;
+        }
+
+        .book { width: 180px; text-align: center; }
+        .book a {
+            text-decoration: none; color: black; display: block; background: white;
+            padding: 10px; border-radius: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            transition: 0.2s;
+        }
+        .book a:hover { transform: translateY(-6px); box-shadow: 0 6px 14px rgba(0,0,0,0.15); }
+        .book img { width: 100%; height: 240px; object-fit: cover; border-radius: 8px; }
+
+        .score { margin-top: 5px; font-size: 13px; color: #e67e22; font-weight: bold; }
+        .badge {
+            font-size: 11px; padding: 3px 6px; border-radius: 6px;
+            background: #ffefcc; display: inline-block; margin-top: 5px;
+        }
+        .badge.drop { background: #fde8e8; color: #c0392b; }
+
+        .divider {
+            border: none; border-top: 2px solid #e0e0e0;
+            margin: 10px 40px 0;
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="nav">
+    <a href="/">📚 Books</a>
+    <a href="/bookdeals">🔥 Deals</a>
+    <a href="/trending">📈 Trending Books</a>
+    <a href="/availability-page">📊 Charts</a>
+</div>
+
+<h1>📈 Trending Books</h1>
+
+<!-- SECTION 1: Rising demand -->
+<h2>🔥 Rising Demand</h2>
+<div class="subtitle">Books with the fastest growing demand right now</div>
+<div id="books-time" class="bookshelf"></div>
+
+<hr class="divider" />
+
+<!-- SECTION 2: Most checkouts -->
+<h2>📚 Most Checked Out</h2>
+<div class="subtitle">Library books losing the most available copies over time</div>
+<div id="books-drop" class="bookshelf"></div>
+
+<script>
+function fetchTrendingTime() {
+    fetch("/trending-time")
+        .then(res => res.json())
+        .then(books => {
+            const container = document.getElementById("books-time");
+            container.innerHTML = "";
+            books.forEach(book => {
+                container.innerHTML += `
+                    <div class="book">
+                        <a href="/book/${book.book_id}">
+                            <img src="${book.image || ''}" />
+                            <p>${book.title || book.isbn}</p>
+                            <div class="score">🔥 ${Number(book.change).toFixed(2)}</div>
+                            <div class="badge">rising</div>
+                        </a>
+                    </div>
+                `;
+            });
+        });
+}
+
+function fetchTrendingDrop() {
+    fetch("/trending-books")
+        .then(res => res.json())
+        .then(books => {
+            const container = document.getElementById("books-drop");
+            container.innerHTML = "";
+            books.forEach(book => {
+                container.innerHTML += `
+                    <div class="book">
+                        <a href="/availability-page?book_id=${book.book_id}">
+                            <img src="${book.image || ''}" />
+                            <p>${book.title || book.isbn}</p>
+                            <div class="score">📉 ${book.drop} copies out</div>
+                            <div class="badge drop">high demand</div>
+                        </a>
+                    </div>
+                `;
+            });
+        });
+}
+
+fetchTrendingTime();
+fetchTrendingDrop();
+</script>
+
+</body>
+</html>

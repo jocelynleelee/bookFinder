@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+    <title>🛒 BookOutlet Price History</title>
+
+```
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+<style>
+    body {
+        font-family: Arial;
+        background: #f5f5f7;
+        margin: 0;
+    }
+
+    .nav {
+        display: flex;
+        gap: 20px;
+        padding: 15px;
+        background: white;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+        justify-content: center;
+    }
+
+    .nav a {
+        text-decoration: none;
+        color: #333;
+        font-weight: bold;
+    }
+
+    h1 {
+        text-align: center;
+        padding: 20px;
+        margin: 0;
+    }
+
+    .controls {
+        text-align: center;
+        margin: 20px;
+    }
+
+    input {
+        padding: 10px;
+        width: 280px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+
+    button {
+        padding: 10px 15px;
+        border-radius: 8px;
+        border: none;
+        background: #4a90e2;
+        color: white;
+        cursor: pointer;
+    }
+
+    /* ✅ BIG CHART FIX */
+    .chart-wrapper {
+        width: 95%;
+        max-width: 1200px;
+        height: 550px;
+        margin: 30px auto;
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+
+    canvas {
+        width: 100% !important;
+        height: 100% !important;
+    }
+</style>
+```
+
+</head>
+
+<body>
+
+<div class="nav">
+    <a href="/">📚 Books</a>
+    <a href="/bookdeals">🔥 Deals</a>
+    <a href="/trending">📈 Trending</a>
+    <a href="/availability-page">📊 Library</a>
+</div>
+
+<h1>🛒 BookOutlet Price & Inventory History</h1>
+
+<div class="controls">
+    <input id="isbn" placeholder="Enter ISBN..." />
+    <button onclick="loadChart()">Show History</button>
+</div>
+
+<!-- ✅ WRAPPER -->
+
+<div class="chart-wrapper">
+    <canvas id="chart"></canvas>
+</div>
+
+<script>
+let chart;
+
+function loadChart() {
+    const isbn = document.getElementById("isbn").value;
+
+    fetch(`/outlet-history/${isbn}`)
+        .then(res => res.json())
+        .then(data => {
+
+            if (!data || data.length === 0) {
+                alert("No history found");
+                return;
+            }
+
+            const labels = data.map(d =>
+                new Date(d.timestamp).toLocaleString()
+            );
+
+            const price = data.map(d => d.price ?? 0);
+            const original = data.map(d => d.original_price ?? 0);
+            const inventory = data.map(d => d.inventory ?? 0);
+
+            if (chart) {
+                chart.destroy();
+            }
+
+            chart = new Chart(document.getElementById("chart"), {
+                type: "line",
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: "Price",
+                            data: price,
+                            borderWidth: 2,
+                            tension: 0.3
+                        },
+                        {
+                            label: "Original Price",
+                            data: original,
+                            borderDash: [5, 5],
+                            borderWidth: 2
+                        },
+                        {
+                            label: "Inventory",
+                            data: inventory,
+                            borderWidth: 2,
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,  // 🔥 THIS FIXES SIZE
+                    interaction: {
+                        mode: "index",
+                        intersect: false
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            title: { display: true, text: "Price ($)" }
+                        },
+                        y1: {
+                            beginAtZero: true,
+                            position: 'right',
+                            title: { display: true, text: "Inventory" },
+                            grid: { drawOnChartArea: false }
+                        }
+                    }
+                }
+            });
+        });
+}
+
+// auto load
+const params = new URLSearchParams(window.location.search);
+const isbn = params.get("isbn");
+
+if (isbn) {
+    document.getElementById("isbn").value = isbn;
+    loadChart();
+}
+</script>
+
+</body>
+</html>

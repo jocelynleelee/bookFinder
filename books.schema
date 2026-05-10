@@ -1,0 +1,27 @@
+CREATE TABLE books (
+    isbn TEXT PRIMARY KEY,
+    title TEXT,
+    author TEXT,
+    image_url TEXT,
+    format TEXT,
+    publication_year TEXT
+);
+
+CREATE TABLE library_history (
+    id SERIAL PRIMARY KEY,
+    isbn TEXT REFERENCES books(isbn),
+    library TEXT,              -- e.g. VPL, BPL
+    date DATE NOT NULL,
+    available_copies INT,
+    total_copies INT,
+    status TEXT
+);
+
+CREATE TABLE outlet_history (
+    id SERIAL PRIMARY KEY,
+    isbn TEXT REFERENCES books(isbn),
+    date DATE NOT NULL,
+    price NUMERIC(10,2),
+    original_price NUMERIC(10,2),
+    inventory INT
+);

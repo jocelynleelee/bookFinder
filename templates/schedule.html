@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reading Schedule</title>
+    <style>
+        body { font-family: Arial; background: #f5f5f7; margin: 0; }
+
+        .nav {
+            display: flex; gap: 20px; padding: 15px; background: white;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08); justify-content: center;
+        }
+        .nav a {
+            text-decoration: none; color: #333; font-weight: bold;
+            padding: 6px 10px; border-radius: 8px; transition: 0.2s;
+        }
+        .nav a:hover { background: #f0f0f0; }
+
+        h1 { text-align: center; padding: 20px; margin: 0; }
+        .subtitle { text-align: center; color: #888; font-size: 14px; margin-bottom: 20px; }
+
+        .week-grid {
+            display: grid;
+            grid-template-columns: repeat(7, 1fr);
+            gap: 12px;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .day-col {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+            overflow: hidden;
+            min-height: 300px;
+        }
+
+        .day-header {
+            background: #4a90e2;
+            color: white;
+            text-align: center;
+            padding: 10px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .day-header.today { background: #e53935; }
+
+        .day-books {
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .schedule-book {
+            background: #f9f9f9;
+            border-radius: 8px;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+        }
+
+        .schedule-book img {
+            width: 70px;
+            height: 95px;
+            object-fit: cover;
+            border-radius: 6px;
+        }
+
+        .schedule-book .book-title {
+            font-size: 11px;
+            text-align: center;
+            margin-top: 5px;
+            line-height: 1.3;
+            color: #333;
+        }
+
+        .remove-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: #e53935;
+            color: white;
+            border: none;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            font-size: 11px;
+            cursor: pointer;
+            line-height: 18px;
+            text-align: center;
+            padding: 0;
+        }
+
+        .empty-day {
+            text-align: center;
+            color: #ccc;
+            font-size: 12px;
+            padding: 20px 8px;
+        }
+
+        .clear-btn {
+            display: block;
+            margin: 0 auto 30px;
+            padding: 10px 24px;
+            background: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            color: #666;
+            transition: 0.2s;
+        }
+        .clear-btn:hover { background: #ffe0e0; border-color: #e53935; color: #e53935; }
+
+        @media (max-width: 768px) {
+            .week-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="nav">
+    <a href="/">📚 Books</a>
+    <a href="/bookdeals">🔥 Deals</a>
+    <a href="/trending">📈 Trending</a>
+    <a href="/availability-page">📊 Charts</a>
+    <a href="/schedule">📅 Schedule</a>
+</div>
+
+<h1>📅 Reading Schedule</h1>
+<div class="subtitle">Plan your week of reading</div>
+
+<div class="week-grid" id="week-grid"></div>
+
+<button class="clear-btn" onclick="clearAll()">🗑 Clear entire schedule</button>
+
+<script>
+const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const STORAGE_KEY = "reading_schedule";
+
+function getSchedule() {
+    try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || {};
+    } catch { return {}; }
+}
+
+function saveSchedule(schedule) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(schedule));
+}
+
+function getTodayName() {
+    const day = new Date().getDay(); // 0 = Sunday
+    const map = [6, 0, 1, 2, 3, 4, 5]; // map JS Sunday=0 to our Monday=0
+    return DAYS[map[day]];
+}
+
+function removeBook(day, isbn) {
+    const schedule = getSchedule();
+    if (schedule[day]) {
+        schedule[day] = schedule[day].filter(b => b.isbn !== isbn);
+        if (schedule[day].length === 0) delete schedule[day];
+    }
+    saveSchedule(schedule);
+    render();
+}
+
+function clearAll() {
+    if (confirm("Clear the entire schedule?")) {
+        localStorage.removeItem(STORAGE_KEY);
+        render();
+    }
+}
+
+function render() {
+    const schedule = getSchedule();
+    const today = getTodayName();
+    const grid = document.getElementById("week-grid");
+    grid.innerHTML = "";
+
+    DAYS.forEach(day => {
+        const books = schedule[day] || [];
+        const isToday = day === today;
+
+        const col = document.createElement("div");
+        col.className = "day-col";
+        col.innerHTML = `
+            <div class="day-header ${isToday ? 'today' : ''}">${day}${isToday ? ' 📍' : ''}</div>
+            <div class="day-books" id="books-${day}"></div>
+        `;
+        grid.appendChild(col);
+
+        const booksContainer = col.querySelector(`#books-${day}`);
+
+        if (books.length === 0) {
+            booksContainer.innerHTML = `<div class="empty-day">No books yet</div>`;
+        } else {
+            books.forEach(book => {
+                const div = document.createElement("div");
+                div.className = "schedule-book";
+                div.innerHTML = `
+                    <button class="remove-btn" onclick="removeBook('${day}', '${book.isbn}')">×</button>
+                    <img src="${book.image_url || ''}" onerror="this.style.display='none'" />
+                    <div class="book-title">${book.title}</div>
+                `;
+                booksContainer.appendChild(div);
+            });
+        }
+    });
+}
+
+render();
+</script>
+
+</body>
+</html>
