@@ -12,8 +12,8 @@ from models import Book, LibraryHistory
 # App & DB setup
 # ──────────────────────────────────────────
 
-DATABASE_URL = "postgresql://postgres@localhost:5432/kidbookdb"
-
+# DATABASE_URL = "postgresql://postgres@localhost:5432/kidbookdb"
+DATABASE_URL = "postgresql://kidbookdb_g3bi_user:NvS4CNu0BX2I1RIZrZOTHMMfqmC3AmQV@dpg-d800jdpo3t8c73db4b8g-a/kidbookdb_g3bi"
 app = Flask(__name__)
 CORS(app)
 
