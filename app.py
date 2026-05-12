@@ -534,6 +534,20 @@ def outlet_history(isbn):
     ])
 
 
+@app.route("/admin/ingest-library", methods=["POST"])
+def admin_ingest_library():
+    """Manually trigger library ingestion"""
+    from ingest_library import run_pipeline
+    run_pipeline()
+    return jsonify({"status": "Ingestion started"}), 200
+
+@app.route("/admin/ingest-outlet", methods=["POST"])
+def admin_ingest_outlet():
+    """Manually trigger outlet ingestion"""
+    from ingest_bookoutlet import run_ingest
+    run_ingest()
+    return jsonify({"status": "Ingestion started"}), 200
+
 # ──────────────────────────────────────────
 # Error handlers
 # ──────────────────────────────────────────
