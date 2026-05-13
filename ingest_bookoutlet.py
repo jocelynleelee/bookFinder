@@ -15,8 +15,8 @@ from sqlalchemy import create_engine, text
 # Config
 # ──────────────────────────────────────────
 
-DATABASE_URL = "postgresql+psycopg2://postgres@localhost:5432/kidbookdb"
-
+# DATABASE_URL = "postgresql+psycopg2://postgres@localhost:5432/kidbookdb"
+DATABASE_URL = "postgresql://kidbookdb_g3bi_user:NvS4CNu0BX2I1RIZrZOTHMMfqmC3AmQV@dpg-d800jdpo3t8c73db4b8g-a/kidbookdb_g3bi"
 SEARCH_URL = "https://ac.cnstrc.com/search/{query}"
 API_KEY = "key_udjk7sSacp6D0sVq"
 PAGE_DELAY = 5  # seconds between pages
