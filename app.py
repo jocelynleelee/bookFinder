@@ -7,6 +7,7 @@ from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
 from models import Book, LibraryHistory
+# from childcare_routes import register_childcare_routes
 
 # ──────────────────────────────────────────
 # App & DB setup
@@ -16,7 +17,7 @@ from models import Book, LibraryHistory
 DATABASE_URL = "postgresql://kidbookdb_g3bi_user:NvS4CNu0BX2I1RIZrZOTHMMfqmC3AmQV@dpg-d800jdpo3t8c73db4b8g-a/kidbookdb_g3bi"
 app = Flask(__name__)
 CORS(app)
-
+# register_childcare_routes(app)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine)
 
@@ -547,6 +548,18 @@ def admin_ingest_outlet():
     from ingest_bookoutlet import run_ingest
     run_ingest()
     return jsonify({"status": "Ingestion started"}), 200
+
+@app.route("/childcare-map")
+def childcare_map():
+    return render_template("childcare-map.html")
+
+@app.route("/restaurants")
+def restaurants():
+    return render_template("restaurant-map.html")
+
+@app.route("/parks")
+def parks():
+    return render_template("parks-map.html")
 
 # ──────────────────────────────────────────
 # Error handlers
