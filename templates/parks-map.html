@@ -1,0 +1,1050 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Explore Vancouver parks — facilities, size, washrooms, special features">
+<meta name="theme-color" content="#4a90e2">
+<title>Park Finder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── Nav ── */
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a { color: #4a90e2; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  nav a.active { color: #333; font-weight: 600; }
+
+  /* ── Page header ── */
+  .page-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1.2rem 1.5rem 1rem;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: #777; }
+
+  /* View toggle */
+  .view-toggle {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    flex-shrink: 0;
+  }
+  .view-btn {
+    padding: 6px 14px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    color: #555;
+    transition: all 0.15s;
+  }
+  .view-btn.active { background: #4a90e2; color: #fff; border-color: #4a90e2; }
+
+  /* ── Filters bar ── */
+  .filters-bar {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filters-bar input,
+  .filters-bar select {
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .filters-bar input { flex: 1; min-width: 180px; }
+  .filters-bar select { min-width: 150px; cursor: pointer; }
+  .filters-bar input:focus,
+  .filters-bar select:focus { border-color: #4a90e2; background: #fff; }
+
+  .filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    white-space: nowrap;
+    user-select: none;
+    transition: all 0.15s;
+  }
+  .filter-toggle:hover { border-color: #4a90e2; }
+  .filter-toggle.active { background: #e8f4e8; border-color: #3a8a3a; color: #2a6a2a; font-weight: 500; }
+  .filter-toggle input { display: none; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #f9f9f9;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    color: #555;
+  }
+  .stat-pill {
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+  .pill-blue   { background: #e8f0fb; color: #2c6dbf; }
+  .pill-green  { background: #e8f4e8; color: #2a6a2a; }
+  .pill-orange { background: #fef3e2; color: #7a4f00; }
+
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 300px 1fr;
+    height: calc(100vh - 178px);
+  }
+
+  /* ── Park list ── */
+  .park-list {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .park-list::-webkit-scrollbar { width: 4px; }
+  .park-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .park-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .park-item:hover { background: #f0f6ff; }
+  .park-item.active { background: #e8f4e8; border-left: 3px solid #3a8a3a; padding-left: 11px; }
+
+  .park-name { font-size: 13px; font-weight: 600; color: #222; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .park-meta { font-size: 11px; color: #888; margin-top: 2px; }
+  .park-tags { display: flex; gap: 4px; margin-top: 5px; flex-wrap: wrap; }
+
+  .tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .size-tiny   { background: #f0f0f0; color: #666; }
+  .size-small  { background: #e8f4e8; color: #2a6a2a; }
+  .size-medium { background: #e8f0fb; color: #2c6dbf; }
+  .size-large  { background: #fef3e2; color: #7a4f00; }
+  .size-regional { background: #f0e8fb; color: #5a2a8a; }
+
+  .no-results { padding: 2rem 1rem; text-align: center; color: #aaa; font-size: 13px; }
+  .list-footer { padding: 10px 14px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; background: #fafafa; }
+
+  /* ── Map view ── */
+  .map-wrap { position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  /* ── Charts view ── */
+  .charts-view {
+    display: none;
+    overflow-y: auto;
+    padding: 1.5rem;
+    gap: 1.5rem;
+    flex-direction: column;
+    background: #f9f9f9;
+  }
+  .charts-view.visible { display: flex; }
+
+  .chart-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+  }
+  .chart-card h3 { font-size: 14px; font-weight: 600; color: #333; margin-bottom: 1rem; }
+  .chart-wrap { position: relative; }
+
+  /* ── Detail card ── */
+  .detail-card {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 300px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 1000;
+    padding: 14px 16px;
+  }
+  .detail-card.visible { display: block; }
+  .detail-card::-webkit-scrollbar { width: 4px; }
+  .detail-card::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .detail-close {
+    position: absolute; top: 10px; right: 12px;
+    background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer;
+  }
+  .detail-close:hover { color: #333; }
+  .detail-name { font-size: 15px; font-weight: 700; color: #222; margin-bottom: 4px; padding-right: 20px; }
+  .detail-addr { font-size: 12px; color: #888; margin-bottom: 8px; }
+  .detail-size-bar {
+    height: 6px; border-radius: 3px; background: #eee; margin-bottom: 10px; overflow: hidden;
+  }
+  .detail-size-fill { height: 100%; border-radius: 3px; background: #3a8a3a; transition: width 0.3s; }
+
+  .detail-section { margin-top: 10px; }
+  .detail-section-title {
+    font-size: 10px; font-weight: 600; color: #aaa;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 5px;
+  }
+  .detail-row { font-size: 12px; color: #555; margin-bottom: 3px; display: flex; gap: 6px; }
+  .detail-row .lbl { color: #aaa; min-width: 80px; flex-shrink: 0; }
+
+  .facility-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .facility-tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
+    background: #e8f0fb; color: #2c6dbf; font-weight: 500;
+  }
+  .feature-tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
+    background: #fef3e2; color: #7a4f00; font-weight: 500;
+  }
+  .washroom-tag {
+    font-size: 10px; padding: 2px 8px; border-radius: 20px;
+    background: #f0e8fb; color: #5a2a8a; font-weight: 500;
+  }
+
+  /* Legend */
+  .map-legend {
+    background: #fff; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px 14px; font-size: 11px; line-height: 2; max-width: 190px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .map-legend h4 { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  /* Loading */
+  .loading { position: fixed; inset: 0; background: #f9f9f9; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 10px; transition: opacity 0.3s; }
+  .loading.hidden { opacity: 0; pointer-events: none; }
+  .loading p { font-size: 14px; color: #888; }
+  .spinner { width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #3a8a3a; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 700px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
+    .map-wrap { height: 380px; }
+    .park-list { height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div style="font-size:32px">🌳</div>
+  <div class="spinner"></div>
+  <p id="loadingMsg">Loading parks data...</p>
+</div>
+
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants">🍽️ Restaurants</a>
+  <a href="/parks" class="active">🌳 Parks</a>
+</nav>
+
+<div class="page-header">
+  <div>
+    <h1>🌳 Park Finder</h1>
+    <p>Vancouver Board of Parks and Recreation — updated weekly</p>
+  </div>
+  <div class="view-toggle">
+    <button class="view-btn active" id="btnMap" onclick="switchView('map')">🗺️ Map</button>
+    <button class="view-btn" id="btnCharts" onclick="switchView('charts')">📊 Charts</button>
+  </div>
+</div>
+
+<div class="filters-bar">
+  <input type="text" id="searchInput" placeholder="🔍 Search park name...">
+  <select id="neighbourhoodFilter"><option value="">All neighbourhoods</option></select>
+  <select id="sizeFilter">
+    <option value="">All sizes</option>
+    <option value="tiny">🟤 Tiny (&lt;0.5 ha)</option>
+    <option value="small">🟢 Small (0.5–2 ha)</option>
+    <option value="medium">🔵 Medium (2–10 ha)</option>
+    <option value="large">🟠 Large (10–50 ha)</option>
+    <option value="regional">🟣 Regional (&gt;50 ha)</option>
+  </select>
+  <label class="filter-toggle" id="playgroundToggle">
+    <input type="checkbox" id="playgroundFilter" onchange="applyFilters()">
+    🛝 Playground
+  </label>
+  <label class="filter-toggle" id="washroomToggle">
+    <input type="checkbox" id="washroomFilter" onchange="applyFilters()">
+    🚻 Washroom
+  </label>
+  <label class="filter-toggle" id="dogToggle">
+    <input type="checkbox" id="dogFilter" onchange="applyFilters()">
+    🐕 Off-leash
+  </label>
+</div>
+
+<div class="stats-row">
+  <span>Showing</span>
+  <span class="stat-pill pill-blue" id="statShowing">—</span>
+  <span>of</span>
+  <span class="stat-pill pill-blue" id="statTotal">—</span>
+  <span>parks</span>
+  <span>·</span>
+  <span class="stat-pill pill-green" id="statHa">—</span>
+  <span>total hectares</span>
+  <span>·</span>
+  <span class="stat-pill pill-orange" id="statPlaygrounds">—</span>
+  <span>with playgrounds</span>
+</div>
+
+<div class="main">
+  <div class="park-list" id="parkList"></div>
+
+  <div class="map-wrap" id="mapWrap">
+    <div id="map"></div>
+    <div class="detail-card" id="detailCard">
+      <button class="detail-close" onclick="closeDetail()">×</button>
+      <div class="detail-name" id="detailName"></div>
+      <div class="detail-addr" id="detailAddr"></div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span class="tag" id="detailSizeTag"></span>
+        <span style="font-size:12px;color:#888" id="detailHa"></span>
+      </div>
+      <div class="detail-size-bar"><div class="detail-size-fill" id="detailSizeFill"></div></div>
+
+      <div class="detail-section" id="detailFacilitiesSection">
+        <div class="detail-section-title">Facilities</div>
+        <div class="facility-list" id="detailFacilities"></div>
+      </div>
+
+      <div class="detail-section" id="detailFeaturesSection">
+        <div class="detail-section-title">Special Features</div>
+        <div class="facility-list" id="detailFeatures"></div>
+      </div>
+
+      <div class="detail-section" id="detailWashroomsSection">
+        <div class="detail-section-title">Washrooms</div>
+        <div id="detailWashrooms"></div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">Info</div>
+        <div class="detail-row"><span class="lbl">Neighbourhood</span><span id="detailNeighbourhood"></span></div>
+        <div class="detail-row"><span class="lbl">Size</span><span id="detailSize"></span></div>
+        <div class="detail-row" id="detailNbrUrl"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="charts-view" id="chartsView">
+    <div class="chart-card">
+      <h3>🏆 Top 15 Largest Parks (hectares)</h3>
+      <div class="chart-wrap" style="height:320px"><canvas id="chartTop"></canvas></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.5rem">
+      <div class="chart-card">
+        <h3>📐 Park Size Distribution</h3>
+        <div class="chart-wrap" style="height:260px"><canvas id="chartSize"></canvas></div>
+      </div>
+      <div class="chart-card">
+        <h3>🏘️ Parks by Neighbourhood</h3>
+        <div class="chart-wrap" style="height:260px"><canvas id="chartNeighbourhood"></canvas></div>
+      </div>
+    </div>
+    <div class="chart-card">
+      <h3>🛝 Facilities Breakdown</h3>
+      <div class="chart-wrap" style="height:260px"><canvas id="chartFacilities"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <h3>🌿 Park Shapes (actual outlines)</h3>
+      <canvas id="chartShapes" style="width:100%;height:400px"></canvas>
+    </div>
+  </div>
+</div>
+
+<script>
+const API_BASE = "https://opendata.vancouver.ca/api/explore/v2.1/catalog/datasets";
+
+// Size classification
+function sizeClass(ha) {
+  if (ha < 0.5)  return "tiny";
+  if (ha < 2)    return "small";
+  if (ha < 10)   return "medium";
+  if (ha < 50)   return "large";
+  return "regional";
+}
+
+function sizeLabel(ha) {
+  const c = sizeClass(ha);
+  return {
+    tiny:     "🟤 Tiny",
+    small:    "🟢 Small",
+    medium:   "🔵 Medium",
+    large:    "🟠 Large",
+    regional: "🟣 Regional",
+  }[c];
+}
+
+function sizeCss(ha) {
+  return {
+    tiny:     "size-tiny",
+    small:    "size-small",
+    medium:   "size-medium",
+    large:    "size-large",
+    regional: "size-regional",
+  }[sizeClass(ha)];
+}
+
+function haToFriendly(ha) {
+  if (ha < 1) return `${(ha * 10000).toFixed(0)} m²`;
+  return `${ha.toFixed(2)} ha`;
+}
+
+function haToFootballs(ha) {
+  const fb = ha / 0.71;
+  if (fb < 0.5) return "";
+  if (fb < 2)   return `≈ ${fb.toFixed(1)} football fields`;
+  return `≈ ${Math.round(fb)} football fields`;
+}
+
+// Polygon colours by size
+function polyColor(ha) {
+  if (ha < 0.5)  return { color: "#888", fillColor: "#ccc" };
+  if (ha < 2)    return { color: "#2a6a2a", fillColor: "#6abf6a" };
+  if (ha < 10)   return { color: "#2c6dbf", fillColor: "#6aaaf5" };
+  if (ha < 50)   return { color: "#7a4f00", fillColor: "#f5b86a" };
+  return { color: "#5a2a8a", fillColor: "#b86af5" };
+}
+
+// ── State ──────────────────────────────────────────────────────────────────
+let map, allParks = [], filtered = [], activeIdx = null;
+let facilitiesByPark = {};   // parkid → [facilitytype, ...]
+let featuresByPark   = {};   // parkid → [specialfeature, ...]
+let washroomsByPark  = {};   // park_name → [{type, hours, wheelchair}, ...]
+let polygonLayer     = null;
+let markerLayer      = null;
+let charts           = {};
+let currentView      = "map";
+
+// ── Map init ──────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map("map").setView([49.2566, -123.13], 12);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const d = document.createElement("div");
+    d.className = "map-legend";
+    d.innerHTML = `<h4>Park size</h4>
+      <div><span class="dot" style="background:#ccc"></span>Tiny (&lt;0.5 ha)</div>
+      <div><span class="dot" style="background:#6abf6a"></span>Small (0.5–2 ha)</div>
+      <div><span class="dot" style="background:#6aaaf5"></span>Medium (2–10 ha)</div>
+      <div><span class="dot" style="background:#f5b86a"></span>Large (10–50 ha)</div>
+      <div><span class="dot" style="background:#b86af5"></span>Regional (&gt;50 ha)</div>`;
+    return d;
+  };
+  legend.addTo(map);
+}
+
+// ── Render polygons ────────────────────────────────────────────────────────
+function renderPolygons() {
+  if (polygonLayer) map.removeLayer(polygonLayer);
+  if (markerLayer)  map.removeLayer(markerLayer);
+
+  const markers = L.layerGroup();
+  const polys   = L.layerGroup();
+
+  filtered.forEach((park, i) => {
+    const ha    = park.hectare || 0;
+    const c     = polyColor(ha);
+    const lat   = park.googlemapdest?.lat;
+    const lon   = park.googlemapdest?.lon;
+
+    // Draw polygon if we have polygon data
+    if (park._polygon) {
+      try {
+        const poly = L.geoJSON(park._polygon, {
+          style: {
+            color:       c.color,
+            fillColor:   c.fillColor,
+            weight:      1.5,
+            fillOpacity: 0.4,
+            opacity:     0.8,
+          }
+        });
+        poly.on("click", () => selectPark(i, true));
+        polys.addLayer(poly);
+        return;
+      } catch(e) {}
+    }
+
+    // Fall back to circle marker
+    if (!lat || !lon) return;
+    const radius = Math.max(5, Math.min(30, Math.sqrt(ha) * 4));
+    const circle = L.circleMarker([lat, lon], {
+      radius,
+      color:       c.color,
+      fillColor:   c.fillColor,
+      weight:      1.5,
+      fillOpacity: 0.5,
+      opacity:     0.9,
+    });
+    circle.on("click", () => selectPark(i, true));
+    markers.addLayer(circle);
+  });
+
+  polygonLayer = polys.addTo(map);
+  markerLayer  = markers.addTo(map);
+}
+
+// ── Render list ────────────────────────────────────────────────────────────
+function renderList() {
+  const el = document.getElementById("parkList");
+  if (!filtered.length) {
+    el.innerHTML = `<div class="no-results">No parks match your filters.</div>`;
+    return;
+  }
+
+  el.innerHTML = filtered.slice(0, 200).map((park, i) => {
+    const ha       = park.hectare || 0;
+    const haStr    = haToFriendly(ha);
+    const szCss    = sizeCss(ha);
+    const szLabel  = sizeLabel(ha);
+    const facs     = facilitiesByPark[park.parkid] || [];
+    const hasPlay  = facs.some(f => f.toLowerCase().includes("playground"));
+    const hasDog   = facs.some(f => f.toLowerCase().includes("off-leash"));
+
+    return `<div class="park-item" id="pi${i}" onclick="selectPark(${i}, false)">
+      <div class="park-name">${park.name}</div>
+      <div class="park-meta">${park.neighbourhoodname || "—"} · ${haStr}</div>
+      <div class="park-tags">
+        <span class="tag ${szCss}">${szLabel}</span>
+        ${park.washrooms === "Y" ? `<span class="tag" style="background:#f0e8fb;color:#5a2a8a">🚻</span>` : ""}
+        ${hasPlay ? `<span class="tag" style="background:#e8f0fb;color:#2c6dbf">🛝</span>` : ""}
+        ${hasDog  ? `<span class="tag" style="background:#fef3e2;color:#7a4f00">🐕</span>` : ""}
+      </div>
+    </div>`;
+  }).join("") + (filtered.length > 200
+    ? `<div class="list-footer">Showing 200 of ${filtered.length}. Use filters to narrow down.</div>`
+    : `<div class="list-footer">${filtered.length} park${filtered.length===1?"":"s"}</div>`);
+}
+
+// ── Select a park ──────────────────────────────────────────────────────────
+function selectPark(idx, fromMap) {
+  const park = filtered[idx];
+  if (!park) return;
+
+  if (activeIdx !== null) {
+    const prev = document.getElementById(`pi${activeIdx}`);
+    if (prev) prev.classList.remove("active");
+  }
+  activeIdx = idx;
+  const el = document.getElementById(`pi${idx}`);
+  if (el) { el.classList.add("active"); el.scrollIntoView({ block: "nearest" }); }
+
+  const lat = park.googlemapdest?.lat;
+  const lon = park.googlemapdest?.lon;
+  if (lat && lon && !fromMap) map.setView([lat, lon], 15, { animate: true });
+
+  // Fill detail card
+  const ha = park.hectare || 0;
+  document.getElementById("detailName").textContent = park.name;
+  document.getElementById("detailAddr").textContent =
+    [park.streetnumber, park.streetname].filter(Boolean).join(" ") || "—";
+
+  const szTag = document.getElementById("detailSizeTag");
+  szTag.textContent = sizeLabel(ha);
+  szTag.className = `tag ${sizeCss(ha)}`;
+
+  document.getElementById("detailHa").textContent =
+    `${haToFriendly(ha)} ${haToFootballs(ha) ? "· " + haToFootballs(ha) : ""}`;
+
+  // Size bar (max = Stanley Park 405 ha)
+  const pct = Math.min(100, (ha / 405) * 100);
+  document.getElementById("detailSizeFill").style.width = `${pct}%`;
+
+  // Facilities
+  const facs = facilitiesByPark[park.parkid] || [];
+  const facEl = document.getElementById("detailFacilities");
+  const facSection = document.getElementById("detailFacilitiesSection");
+  if (facs.length) {
+    facEl.innerHTML = facs.map(f =>
+      `<span class="facility-tag">${f}</span>`
+    ).join("");
+    facSection.style.display = "block";
+  } else {
+    facSection.style.display = "none";
+  }
+
+  // Special features
+  const feats = featuresByPark[park.parkid] || [];
+  const featEl = document.getElementById("detailFeatures");
+  const featSection = document.getElementById("detailFeaturesSection");
+  if (feats.length) {
+    featEl.innerHTML = feats.map(f => `<span class="feature-tag">${f}</span>`).join("");
+    featSection.style.display = "block";
+  } else {
+    featSection.style.display = "none";
+  }
+
+  // Washrooms
+  const washrooms = washroomsByPark[park.name] || [];
+  const washEl = document.getElementById("detailWashrooms");
+  const washSection = document.getElementById("detailWashroomsSection");
+  if (washrooms.length) {
+    washEl.innerHTML = washrooms.map(w => `
+      <div style="margin-bottom:6px;padding:6px 8px;background:#f9f9f9;border-radius:6px;font-size:11px">
+        <div style="font-weight:500;color:#333">${w.type || "Washroom"} ${w.wheelchair_access === "Yes" ? "♿" : ""}</div>
+        <div style="color:#888;margin-top:2px">${w.location || ""}</div>
+        <div style="color:#888">${w.summer_hours ? "Summer: " + w.summer_hours : ""}</div>
+      </div>`).join("");
+    washSection.style.display = "block";
+  } else {
+    washSection.style.display = "none";
+  }
+
+  document.getElementById("detailNeighbourhood").textContent = park.neighbourhoodname || "—";
+  document.getElementById("detailSize").textContent = `${ha} hectares`;
+
+  const nbrUrl = document.getElementById("detailNbrUrl");
+  if (park.neighbourhoodurl) {
+    nbrUrl.innerHTML = `<span class="lbl">Info</span><a href="${park.neighbourhoodurl}" target="_blank" rel="noopener" style="color:#4a90e2;font-size:12px">Neighbourhood page ↗</a>`;
+    nbrUrl.style.display = "flex";
+  } else {
+    nbrUrl.style.display = "none";
+  }
+
+  document.getElementById("detailCard").classList.add("visible");
+}
+
+function closeDetail() {
+  document.getElementById("detailCard").classList.remove("visible");
+  if (activeIdx !== null) {
+    const prev = document.getElementById(`pi${activeIdx}`);
+    if (prev) prev.classList.remove("active");
+    activeIdx = null;
+  }
+}
+
+// ── Filters ────────────────────────────────────────────────────────────────
+function applyFilters() {
+  const q      = document.getElementById("searchInput").value.toLowerCase();
+  const nbr    = document.getElementById("neighbourhoodFilter").value;
+  const size   = document.getElementById("sizeFilter").value;
+  const play   = document.getElementById("playgroundFilter").checked;
+  const wash   = document.getElementById("washroomFilter").checked;
+  const dog    = document.getElementById("dogFilter").checked;
+
+  ["playgroundToggle","washroomToggle","dogToggle"].forEach(id => {
+    const cb = document.getElementById(id.replace("Toggle", "Filter"));
+    document.getElementById(id).classList.toggle("active", cb.checked);
+  });
+
+  filtered = allParks.filter(park => {
+    if (q && !park.name.toLowerCase().includes(q)) return false;
+    if (nbr && park.neighbourhoodname !== nbr) return false;
+    if (size && sizeClass(park.hectare || 0) !== size) return false;
+    const facs = facilitiesByPark[park.parkid] || [];
+    if (play && !facs.some(f => f.toLowerCase().includes("playground"))) return false;
+    if (wash && park.washrooms !== "Y") return false;
+    if (dog  && !facs.some(f => f.toLowerCase().includes("off-leash"))) return false;
+    return true;
+  });
+
+  activeIdx = null;
+  closeDetail();
+  renderPolygons();
+  renderList();
+  updateStats();
+
+  if (currentView === "charts") renderCharts();
+}
+
+function updateStats() {
+  const totalHa   = filtered.reduce((s, p) => s + (p.hectare || 0), 0);
+  const playCount = filtered.filter(p => (facilitiesByPark[p.parkid] || []).some(f => f.toLowerCase().includes("playground"))).length;
+  document.getElementById("statShowing").textContent   = filtered.length.toLocaleString();
+  document.getElementById("statTotal").textContent     = allParks.length.toLocaleString();
+  document.getElementById("statHa").textContent        = totalHa.toFixed(1);
+  document.getElementById("statPlaygrounds").textContent = playCount;
+}
+
+function populateFilters() {
+  const nbrs = [...new Set(allParks.map(p => p.neighbourhoodname).filter(Boolean))].sort();
+  const sel  = document.getElementById("neighbourhoodFilter");
+  nbrs.forEach(n => { const o = document.createElement("option"); o.value = n; o.textContent = n; sel.appendChild(o); });
+}
+
+// ── View toggle ────────────────────────────────────────────────────────────
+function switchView(view) {
+  currentView = view;
+  document.getElementById("btnMap").classList.toggle("active", view === "map");
+  document.getElementById("btnCharts").classList.toggle("active", view === "charts");
+  document.getElementById("mapWrap").style.display    = view === "map" ? "" : "none";
+  document.getElementById("chartsView").classList.toggle("visible", view === "charts");
+  if (view === "charts") renderCharts();
+}
+
+// ── Charts ─────────────────────────────────────────────────────────────────
+function renderCharts() {
+  renderTopChart();
+  renderSizeChart();
+  renderNeighbourhoodChart();
+  renderFacilitiesChart();
+  renderShapesChart();
+}
+
+function destroyChart(id) {
+  if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+}
+
+function renderTopChart() {
+  destroyChart("top");
+  const top = [...filtered].sort((a,b) => (b.hectare||0) - (a.hectare||0)).slice(0,15);
+  charts.top = new Chart(document.getElementById("chartTop"), {
+    type: "bar",
+    data: {
+      labels: top.map(p => p.name),
+      datasets: [{
+        label: "Hectares",
+        data: top.map(p => p.hectare || 0),
+        backgroundColor: top.map(p => polyColor(p.hectare||0).fillColor),
+        borderColor:     top.map(p => polyColor(p.hectare||0).color),
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      indexAxis: "y",
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { title: { display: true, text: "Hectares" } },
+        y: { ticks: { font: { size: 11 } } }
+      }
+    }
+  });
+}
+
+function renderSizeChart() {
+  destroyChart("size");
+  const buckets = { tiny: 0, small: 0, medium: 0, large: 0, regional: 0 };
+  filtered.forEach(p => buckets[sizeClass(p.hectare||0)]++);
+  charts.size = new Chart(document.getElementById("chartSize"), {
+    type: "doughnut",
+    data: {
+      labels: ["Tiny (<0.5ha)", "Small (0.5–2ha)", "Medium (2–10ha)", "Large (10–50ha)", "Regional (>50ha)"],
+      datasets: [{
+        data: Object.values(buckets),
+        backgroundColor: ["#ccc","#6abf6a","#6aaaf5","#f5b86a","#b86af5"],
+        borderWidth: 2,
+        borderColor: "#fff",
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom", labels: { font: { size: 11 } } } }
+    }
+  });
+}
+
+function renderNeighbourhoodChart() {
+  destroyChart("nbr");
+  const counts = {};
+  filtered.forEach(p => { counts[p.neighbourhoodname||"Unknown"] = (counts[p.neighbourhoodname||"Unknown"]||0)+1; });
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,12);
+  charts.nbr = new Chart(document.getElementById("chartNeighbourhood"), {
+    type: "bar",
+    data: {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: "Parks",
+        data: sorted.map(([,v]) => v),
+        backgroundColor: "#6aaaf5",
+        borderColor: "#2c6dbf",
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
+        y: { title: { display: true, text: "# Parks" } }
+      }
+    }
+  });
+}
+
+function renderFacilitiesChart() {
+  destroyChart("fac");
+  const counts = {};
+  filtered.forEach(p => {
+    (facilitiesByPark[p.parkid]||[]).forEach(f => {
+      counts[f] = (counts[f]||0) + 1;
+    });
+  });
+  const sorted = Object.entries(counts).sort((a,b) => b[1]-a[1]).slice(0,15);
+  charts.fac = new Chart(document.getElementById("chartFacilities"), {
+    type: "bar",
+    data: {
+      labels: sorted.map(([k]) => k),
+      datasets: [{
+        label: "Parks with this facility",
+        data: sorted.map(([,v]) => v),
+        backgroundColor: "#6abf6a",
+        borderColor: "#2a6a2a",
+        borderWidth: 1,
+        borderRadius: 4,
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { font: { size: 10 }, maxRotation: 45 } },
+        y: { title: { display: true, text: "# Parks" } }
+      }
+    }
+  });
+}
+
+function renderShapesChart() {
+  // Draw actual park polygon outlines on an HTML canvas
+  const canvas = document.getElementById("chartShapes");
+  const ctx    = canvas.getContext("2d");
+  canvas.width  = canvas.offsetWidth  || 800;
+  canvas.height = canvas.offsetHeight || 400;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Find bounds of all parks
+  const parksWithPolygons = filtered.filter(p => p._polygon);
+  if (!parksWithPolygons.length) {
+    ctx.fillStyle = "#aaa";
+    ctx.font = "14px sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("No polygon data available — upload parks-polygon-representation.geojson", canvas.width/2, canvas.height/2);
+    return;
+  }
+
+  // Flatten all coordinates to find bounding box
+  let minLon=Infinity, maxLon=-Infinity, minLat=Infinity, maxLat=-Infinity;
+  function processCoords(coords) {
+    if (Array.isArray(coords[0])) coords.forEach(processCoords);
+    else { minLon=Math.min(minLon,coords[0]); maxLon=Math.max(maxLon,coords[0]); minLat=Math.min(minLat,coords[1]); maxLat=Math.max(maxLat,coords[1]); }
+  }
+  parksWithPolygons.forEach(p => {
+    const geom = p._polygon.geometry || p._polygon;
+    if (geom?.coordinates) processCoords(geom.coordinates);
+  });
+
+  const pad    = 20;
+  const scaleX = (canvas.width  - pad*2) / (maxLon - minLon);
+  const scaleY = (canvas.height - pad*2) / (maxLat - minLat);
+  const scale  = Math.min(scaleX, scaleY);
+
+  function toCanvas(lon, lat) {
+    return [
+      pad + (lon - minLon) * scale,
+      canvas.height - pad - (lat - minLat) * scale,
+    ];
+  }
+
+  function drawRing(ring) {
+    if (!ring.length) return;
+    const [x0,y0] = toCanvas(ring[0][0], ring[0][1]);
+    ctx.moveTo(x0, y0);
+    ring.slice(1).forEach(([lon,lat]) => { const [x,y]=toCanvas(lon,lat); ctx.lineTo(x,y); });
+    ctx.closePath();
+  }
+
+  parksWithPolygons.forEach(p => {
+    const ha   = p.hectare || 0;
+    const c    = polyColor(ha);
+    const geom = p._polygon.geometry || p._polygon;
+    if (!geom?.coordinates) return;
+
+    ctx.beginPath();
+    if (geom.type === "Polygon") {
+      geom.coordinates.forEach(drawRing);
+    } else if (geom.type === "MultiPolygon") {
+      geom.coordinates.forEach(poly => poly.forEach(drawRing));
+    }
+    ctx.fillStyle   = c.fillColor + "99"; // semi-transparent
+    ctx.strokeStyle = c.color;
+    ctx.lineWidth   = 0.5;
+    ctx.fill();
+    ctx.stroke();
+  });
+}
+
+// ── Data loading ───────────────────────────────────────────────────────────
+async function loadJSON(url) {
+  const resp = await fetch(url);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${url}`);
+  return resp.json();
+}
+
+async function fetchAll() {
+  const setMsg = m => document.getElementById("loadingMsg").textContent = m;
+
+  setMsg("Loading parks...");
+  const parksData = await loadJSON(
+    `${API_BASE}/parks/exports/json?lang=en&timezone=America%2FVancouver`
+  );
+
+  setMsg("Loading facilities...");
+  const facData = await loadJSON(
+    `${API_BASE}/parks-facilities/exports/json?lang=en&timezone=America%2FVancouver`
+  );
+
+  setMsg("Loading special features...");
+  const featData = await loadJSON(
+    `${API_BASE}/parks-special-features/exports/json?lang=en&timezone=America%2FVancouver`
+  );
+
+  setMsg("Loading washrooms...");
+  const washData = await loadJSON(
+    `${API_BASE}/public-washrooms/exports/json?lang=en&timezone=America%2FVancouver`
+  );
+
+  setMsg("Loading park shapes...");
+  let polyData = null;
+  try {
+    polyData = await loadJSON(
+      `${API_BASE}/parks-polygon-representation/exports/geojson?lang=en&timezone=America%2FVancouver`
+    );
+  } catch(e) {
+    console.warn("Could not load polygon data:", e);
+  }
+
+  // Build lookup maps
+  facData.forEach(f => {
+    if (!facilitiesByPark[f.parkid]) facilitiesByPark[f.parkid] = [];
+    if (!facilitiesByPark[f.parkid].includes(f.facilitytype))
+      facilitiesByPark[f.parkid].push(f.facilitytype);
+  });
+
+  featData.forEach(f => {
+    if (!featuresByPark[f.parkid]) featuresByPark[f.parkid] = [];
+    if (!featuresByPark[f.parkid].includes(f.specialfeature))
+      featuresByPark[f.parkid].push(f.specialfeature);
+  });
+
+  washData.forEach(w => {
+    const key = w.park_name;
+    if (!washroomsByPark[key]) washroomsByPark[key] = [];
+    washroomsByPark[key].push(w);
+  });
+
+  // Attach polygon to each park by name
+  if (polyData?.features) {
+    const polyByName = {};
+    polyData.features.forEach(f => {
+      const name = f.properties?.name;
+      if (name) polyByName[name] = f;
+    });
+    parksData.forEach(p => {
+      if (polyByName[p.name]) p._polygon = polyByName[p.name];
+    });
+  }
+
+  return parksData;
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+document.getElementById("neighbourhoodFilter").addEventListener("change", applyFilters);
+document.getElementById("sizeFilter").addEventListener("change", applyFilters);
+
+async function init() {
+  initMap();
+  try {
+    allParks = await fetchAll();
+  } catch(e) {
+    document.getElementById("loading").innerHTML = `
+      <div style="text-align:center;max-width:400px;padding:2rem">
+        <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+        <p style="font-weight:600;margin-bottom:8px">Could not load parks data</p>
+        <p style="font-size:13px;color:#888">${e.message}</p>
+      </div>`;
+    return;
+  }
+
+  filtered = [...allParks];
+  populateFilters();
+  renderPolygons();
+  renderList();
+  updateStats();
+
+  const ov = document.getElementById("loading");
+  ov.classList.add("hidden");
+  setTimeout(() => ov.remove(), 400);
+}
+
+init();
+</script>
+</body>
+</html>

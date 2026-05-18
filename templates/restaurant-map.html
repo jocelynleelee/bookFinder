@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Find kid-friendly restaurants in Greater Vancouver with health inspection results">
+<meta name="theme-color" content="#4a90e2">
+<title>Restaurant Finder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  /* ── Nav ── */
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a { color: #4a90e2; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  nav a.active { color: #333; font-weight: 600; }
+
+  /* ── Page header ── */
+  .page-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1.2rem 1.5rem 1rem;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: #777; }
+
+  /* ── Filters bar ── */
+  .filters-bar {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filters-bar input,
+  .filters-bar select {
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .filters-bar input { flex: 1; min-width: 180px; }
+  .filters-bar select { min-width: 150px; cursor: pointer; }
+  .filters-bar input:focus,
+  .filters-bar select:focus { border-color: #4a90e2; background: #fff; }
+
+  /* Kid-friendly toggle */
+  .kid-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    color: #555;
+    cursor: pointer;
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    white-space: nowrap;
+    user-select: none;
+    transition: all 0.15s;
+  }
+  .kid-toggle:hover { border-color: #4a90e2; }
+  .kid-toggle.active { background: #fff8e1; border-color: #f0c040; color: #7a5c00; font-weight: 500; }
+  .kid-toggle input { display: none; }
+
+  /* ── Stats row ── */
+  .stats-row {
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #f9f9f9;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    color: #555;
+  }
+  .stat-pill {
+    background: #e8f0fb;
+    color: #2c6dbf;
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 12px;
+    font-weight: 500;
+  }
+
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - 185px);
+  }
+
+  /* ── Facility list ── */
+  .facility-list {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+  }
+  .facility-list::-webkit-scrollbar { width: 4px; }
+  .facility-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .facility-item {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .facility-item:hover { background: #f0f6ff; }
+  .facility-item.active { background: #e8f0fb; border-left: 3px solid #4a90e2; padding-left: 11px; }
+
+  .facility-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #222;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .facility-addr {
+    font-size: 11px;
+    color: #888;
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .facility-meta {
+    display: flex;
+    gap: 5px;
+    margin-top: 5px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .type-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .kid-badge {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: #fff8e1;
+    color: #7a5c00;
+    font-weight: 500;
+  }
+
+  .no-results {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: #aaa;
+    font-size: 13px;
+  }
+  .list-footer {
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #aaa;
+    text-align: center;
+    border-top: 1px solid #f0f0f0;
+    background: #fafafa;
+  }
+
+  /* ── Map ── */
+  .map-wrap { position: relative; flex: 1; }
+  #map { width: 100%; height: 100%; }
+
+  /* ── Detail card ── */
+  .detail-card {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 310px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 1000;
+    padding: 14px 16px;
+  }
+  .detail-card.visible { display: block; }
+  .detail-card::-webkit-scrollbar { width: 4px; }
+  .detail-card::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .detail-close {
+    position: absolute;
+    top: 10px; right: 12px;
+    background: none; border: none;
+    font-size: 18px; color: #aaa;
+    cursor: pointer; line-height: 1;
+  }
+  .detail-close:hover { color: #333; }
+
+  .detail-name { font-size: 14px; font-weight: 700; color: #222; margin-bottom: 6px; padding-right: 20px; }
+  .detail-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+
+  .detail-row { font-size: 12px; color: #555; margin-bottom: 4px; display: flex; gap: 6px; }
+  .detail-row .lbl { color: #aaa; min-width: 70px; flex-shrink: 0; }
+  .detail-row a { color: #4a90e2; text-decoration: none; }
+  .detail-row a:hover { text-decoration: underline; }
+
+  .kid-toggle-detail {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 10px;
+    padding: 8px 10px;
+    border: 1px solid #f0e0a0;
+    border-radius: 8px;
+    background: #fffdf0;
+    font-size: 12px;
+    color: #7a5c00;
+    cursor: pointer;
+  }
+  .kid-toggle-detail input[type=checkbox] { cursor: pointer; accent-color: #f0c040; }
+
+  /* Inspection history */
+  .insp-header {
+    font-size: 11px;
+    font-weight: 600;
+    color: #888;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 12px 0 6px;
+  }
+  .insp-row {
+    border: 1px solid #eee;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    background: #fafafa;
+  }
+  .insp-row-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: wrap;
+    margin-bottom: 5px;
+  }
+  .insp-date { font-size: 12px; font-weight: 500; color: #333; }
+  .insp-num { font-size: 11px; color: #aaa; }
+  .insp-badges { display: flex; gap: 4px; flex-wrap: wrap; }
+  .badge {
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+    white-space: nowrap;
+  }
+  .badge-ok    { background: #e9f7ef; color: #1e8449; }
+  .badge-warn  { background: #fef9e7; color: #b7770d; }
+  .badge-crit  { background: #fde8e8; color: #c0392b; }
+  .insp-actions { padding-left: 14px; margin-top: 5px; }
+  .insp-actions li { font-size: 11px; color: #666; margin-top: 2px; }
+
+  /* Hazard rating badge */
+  .hazard-low  { background: #e9f7ef; color: #1e8449; }
+  .hazard-med  { background: #fef9e7; color: #b7770d; }
+  .hazard-high { background: #fde8e8; color: #c0392b; }
+  .hazard-na   { background: #f0f0f0; color: #888; }
+
+  /* Legend */
+  .map-legend {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 11px;
+    line-height: 2;
+    max-width: 200px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .map-legend h4 {
+    font-size: 10px; font-weight: 600; color: #aaa;
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px;
+  }
+  .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  /* Loading */
+  .loading {
+    position: fixed; inset: 0;
+    background: #f9f9f9;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    z-index: 9999; gap: 10px;
+    transition: opacity 0.3s;
+  }
+  .loading.hidden { opacity: 0; pointer-events: none; }
+  .loading p { font-size: 14px; color: #888; }
+  .spinner {
+    width: 30px; height: 30px;
+    border: 3px solid #e0e0e0;
+    border-top-color: #4a90e2;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 680px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
+    .map-wrap { height: 380px; }
+    .facility-list { height: calc(100vh - 380px - 185px); min-height: 260px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div style="font-size:32px">🍽️</div>
+  <div class="spinner"></div>
+  <p>Loading restaurants...</p>
+</div>
+
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants" class="active">🍽️ Restaurants</a>
+</nav>
+
+<div class="page-header">
+  <h1>🍽️ Restaurant Finder</h1>
+  <p>Health-inspected restaurants in Greater Vancouver — Vancouver Coastal Health</p>
+</div>
+
+<div class="filters-bar">
+  <input type="text" id="searchInput" placeholder="🔍 Search name or address...">
+  <select id="communityFilter"><option value="">All communities</option></select>
+  <select id="typeFilter"><option value="">All types</option></select>
+  <select id="hazardFilter">
+    <option value="">All hazard ratings</option>
+    <option value="Low">🟢 Low</option>
+    <option value="Moderate">🟡 Moderate</option>
+    <option value="High">🔴 High</option>
+  </select>
+  <label class="kid-toggle" id="kidToggleLabel">
+    <input type="checkbox" id="kidToggle" onchange="applyFilters()">
+    👶 Kid-friendly only
+  </label>
+</div>
+
+<div class="stats-row">
+  <span>Showing</span>
+  <span class="stat-pill" id="statShowing">—</span>
+  <span>of</span>
+  <span class="stat-pill" id="statTotal">—</span>
+  <span>restaurants</span>
+  <span id="statKid" style="display:none;margin-left:4px">
+    · <span class="stat-pill" style="background:#fff8e1;color:#7a5c00" id="statKidCount">—</span> kid-friendly
+  </span>
+</div>
+
+<div class="main">
+  <div class="facility-list" id="facilityList"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="detail-card" id="detailCard">
+      <button class="detail-close" onclick="closeDetail()">×</button>
+      <div class="detail-name" id="detailName"></div>
+      <div class="detail-tags" id="detailTags"></div>
+      <div class="detail-row"><span class="lbl">Address</span><span id="detailAddr"></span></div>
+      <div class="detail-row"><span class="lbl">Community</span><span id="detailCommunity"></span></div>
+      <div class="detail-row"><span class="lbl">Phone</span><span id="detailPhone"></span></div>
+      <div class="detail-row" id="detailWebRow"><span class="lbl">Website</span><a id="detailWeb" href="#" target="_blank" rel="noopener"></a></div>
+      <label class="kid-toggle-detail" id="kidToggleDetail">
+        <input type="checkbox" id="kidCheckbox" onchange="toggleKidFriendly()">
+        <span>👶 Mark as kid-friendly</span>
+      </label>
+      <div id="detailInspections"></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ── Kid-friendly storage (localStorage) ── */
+function getKidFriendly() {
+  try { return JSON.parse(localStorage.getItem("kidFriendly") || "{}"); } catch { return {}; }
+}
+function setKidFriendly(id, val) {
+  const kf = getKidFriendly();
+  if (val) kf[id] = true; else delete kf[id];
+  localStorage.setItem("kidFriendly", JSON.stringify(kf));
+}
+function isKidFriendly(id) { return !!getKidFriendly()[id]; }
+
+/* ── Hazard rating helpers ── */
+function hazardClass(rating) {
+  if (!rating || rating === "INFO_REDACTED") return "hazard-na";
+  const r = rating.toLowerCase();
+  if (r.includes("low"))  return "hazard-low";
+  if (r.includes("mod"))  return "hazard-med";
+  if (r.includes("high")) return "hazard-high";
+  return "hazard-na";
+}
+function hazardLabel(rating) {
+  if (!rating || rating === "INFO_REDACTED") return null;
+  return rating;
+}
+
+/* ── Facility type colours ── */
+const TYPE_COLORS = {
+  "Food Service Establishment 1": { dot:"#2471a3", bg:"#d6eaf8", text:"#1a5276" },
+  "Food Service Establishment 2": { dot:"#117a65", bg:"#d1f2eb", text:"#0e6655" },
+  "Food Service Establishment 3": { dot:"#6c3483", bg:"#e8daef", text:"#512e5f" },
+  "Grocery Store":                { dot:"#1e8449", bg:"#d5f5e3", text:"#196f3d" },
+  "Caterer":                      { dot:"#b7770d", bg:"#fdebd0", text:"#7e5109" },
+  "Commissary":                   { dot:"#cb4335", bg:"#fadbd8", text:"#922b21" },
+};
+const DEFAULT_C = { dot:"#4a90e2", bg:"#e8f0fb", text:"#2c6dbf" };
+
+function typeColor(type) {
+  if (!type) return DEFAULT_C;
+  for (const [k,v] of Object.entries(TYPE_COLORS)) { if (type === k) return v; }
+  return DEFAULT_C;
+}
+
+function makeIcon(type, kidFriendly) {
+  const { dot } = typeColor(type);
+  const star = kidFriendly ? `<text x="14" y="6" font-size="7" text-anchor="middle">👶</text>` : "";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="28" viewBox="0 0 22 28">
+    <path d="M11 0C4.925 0 0 4.925 0 11c0 7.333 11 17 11 17s11-9.667 11-17C11 4.925 6.075 0 11 0z" fill="${dot}"/>
+    <circle cx="11" cy="11" r="4" fill="white"/>
+    ${star}
+  </svg>`;
+  return L.icon({
+    iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+    iconSize: [22, 28], iconAnchor: [11, 28], popupAnchor: [0, -30]
+  });
+}
+
+/* ── State ── */
+let map, allData = [], filtered = [], markers = [], activeIdx = null;
+let inspectionsByFacility = {};
+
+/* ── Map init ── */
+function initMap() {
+  map = L.map("map").setView([49.25, -123.12], 11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const d = document.createElement("div");
+    d.className = "map-legend";
+    d.innerHTML = `<h4>Type</h4>` +
+      Object.entries(TYPE_COLORS).map(([t,c]) =>
+        `<div><span class="dot" style="background:${c.dot}"></span>${t}</div>`
+      ).join("") +
+      `<div><span class="dot" style="background:#4a90e2"></span>Other</div>` +
+      `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #eee"><span style="font-size:12px">👶</span> Kid-friendly</div>`;
+    return d;
+  };
+  legend.addTo(map);
+}
+
+/* ── Render markers ── */
+function renderMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  filtered.forEach((f, i) => {
+    if (!f.latitude || !f.longitude) return;
+    const kf = isKidFriendly(f.id);
+    const m = L.marker([f.latitude, f.longitude], { icon: makeIcon(f.facilityType, kf) });
+    m.on("click", () => selectFacility(i, true));
+    m.addTo(map);
+    markers.push(m);
+    f._marker = m;
+  });
+}
+
+/* ── Render list ── */
+function renderList() {
+  const el = document.getElementById("facilityList");
+  if (!filtered.length) {
+    el.innerHTML = `<div class="no-results">No restaurants match your filters.</div>`;
+    return;
+  }
+  el.innerHTML = filtered.slice(0, 300).map((f, i) => {
+    const c = typeColor(f.facilityType);
+    const kf = isKidFriendly(f.id);
+    const hz = hazardLabel(f.hazardRating);
+    const hc = hazardClass(f.hazardRating);
+    return `<div class="facility-item" id="li${i}" onclick="selectFacility(${i}, false)">
+      <div class="facility-name">${f.facilityName || "—"}</div>
+      <div class="facility-addr">${f.siteAddress || "—"}</div>
+      <div class="facility-meta">
+        <span class="type-tag" style="background:${c.bg};color:${c.text}">${f.facilityType || "—"}</span>
+        ${hz ? `<span class="type-tag ${hc}">${hz}</span>` : ""}
+        ${kf ? `<span class="kid-badge">👶 Kid-friendly</span>` : ""}
+      </div>
+    </div>`;
+  }).join("") + (filtered.length > 300
+    ? `<div class="list-footer">Showing 300 of ${filtered.length}. Use filters to narrow results.</div>`
+    : `<div class="list-footer">${filtered.length} restaurant${filtered.length===1?"":"s"}</div>`);
+}
+
+/* ── Select a facility ── */
+function selectFacility(idx, fromMap) {
+  const f = filtered[idx];
+  if (!f) return;
+
+  if (activeIdx !== null) {
+    const prev = document.getElementById(`li${activeIdx}`);
+    if (prev) prev.classList.remove("active");
+  }
+  activeIdx = idx;
+  const el = document.getElementById(`li${idx}`);
+  if (el) { el.classList.add("active"); el.scrollIntoView({ block: "nearest" }); }
+
+  if (f.latitude && f.longitude && !fromMap) {
+    map.setView([f.latitude, f.longitude], 15, { animate: true });
+  }
+
+  // Fill detail card
+  document.getElementById("detailName").textContent = f.facilityName || "—";
+
+  const c  = typeColor(f.facilityType);
+  const hz = hazardLabel(f.hazardRating);
+  const hc = hazardClass(f.hazardRating);
+  const kf = isKidFriendly(f.id);
+
+  document.getElementById("detailTags").innerHTML =
+    `<span class="type-tag" style="background:${c.bg};color:${c.text}">${f.facilityType || "—"}</span>` +
+    (hz ? `<span class="badge ${hc === "hazard-low" ? "badge-ok" : hc === "hazard-high" ? "badge-crit" : "badge-warn"}">${hz} risk</span>` : "") +
+    (kf ? `<span class="kid-badge">👶 Kid-friendly</span>` : "");
+
+  document.getElementById("detailAddr").textContent     = f.siteAddress || "—";
+  document.getElementById("detailCommunity").textContent = f.community || "—";
+  document.getElementById("detailPhone").textContent    = f.phoneNumber || "—";
+
+  const webRow = document.getElementById("detailWebRow");
+  const webLink = document.getElementById("detailWeb");
+  if (f.website) {
+    webLink.href = f.website;
+    webLink.textContent = f.website.replace(/^https?:\/\//, "");
+    webRow.style.display = "flex";
+  } else {
+    webRow.style.display = "none";
+  }
+
+  // Kid-friendly checkbox
+  document.getElementById("kidCheckbox").checked = kf;
+  document.getElementById("kidToggleDetail").dataset.facilityId = f.id;
+
+  renderInspections(f.id);
+  document.getElementById("detailCard").classList.add("visible");
+}
+
+/* ── Kid-friendly toggle ── */
+function toggleKidFriendly() {
+  const fid = document.getElementById("kidToggleDetail").dataset.facilityId;
+  const val = document.getElementById("kidCheckbox").checked;
+  setKidFriendly(fid, val);
+  // Re-render list + markers to reflect change
+  renderList();
+  renderMarkers();
+  updateStats();
+}
+
+function closeDetail() {
+  document.getElementById("detailCard").classList.remove("visible");
+  if (activeIdx !== null) {
+    const prev = document.getElementById(`li${activeIdx}`);
+    if (prev) prev.classList.remove("active");
+    activeIdx = null;
+  }
+}
+
+/* ── Inspections ── */
+function infractionBadges(critical, nonCritical) {
+  const parts = [];
+  if (critical > 0)    parts.push(`<span class="badge badge-crit">🔴 ${critical} critical</span>`);
+  if (nonCritical > 0) parts.push(`<span class="badge badge-warn">🟡 ${nonCritical} non-critical</span>`);
+  if (!parts.length)   parts.push(`<span class="badge badge-ok">✅ No infractions</span>`);
+  return parts.join(" ");
+}
+
+function renderInspections(facilityId) {
+  const inspections = inspectionsByFacility[facilityId] || [];
+  const el = document.getElementById("detailInspections");
+  if (!inspections.length) {
+    el.innerHTML = `<div class="insp-header">Inspection History</div><div style="font-size:12px;color:#aaa">No inspection records found.</div>`;
+    return;
+  }
+  const rows = inspections.map(insp => {
+    const date     = insp.inspectionDate ? insp.inspectionDate.split("T")[0] : "—";
+    const critical = insp.criticalInfractionCount || 0;
+    const nonCrit  = insp.nonCriticalInfractionCount || 0;
+    const actions  = (insp.actionsTakenList || [])
+      .filter(a => a && !a.toLowerCase().includes("no contraventions found"))
+      .map(a => `<li>${a}</li>`).join("");
+    return `<div class="insp-row">
+      <div class="insp-row-top">
+        <span class="insp-date">${date}</span>
+        <span class="insp-num">${insp.inspectionType || "Routine"} · ${insp.inspectionNumber || ""}</span>
+      </div>
+      <div class="insp-badges">${infractionBadges(critical, nonCrit)}</div>
+      ${actions ? `<ul class="insp-actions">${actions}</ul>` : ""}
+    </div>`;
+  }).join("");
+  el.innerHTML = `<div class="insp-header">Inspection History</div>${rows}`;
+}
+
+/* ── Filters ── */
+function applyFilters() {
+  const q         = document.getElementById("searchInput").value.toLowerCase();
+  const community = document.getElementById("communityFilter").value;
+  const type      = document.getElementById("typeFilter").value;
+  const hazard    = document.getElementById("hazardFilter").value;
+  const kidOnly   = document.getElementById("kidToggle").checked;
+
+  // Update kid toggle label style
+  const kidLabel = document.getElementById("kidToggleLabel");
+  kidLabel.classList.toggle("active", kidOnly);
+
+  const kfMap = getKidFriendly();
+
+  filtered = allData.filter(f => {
+    if (community && f.community !== community) return false;
+    if (type && f.facilityType !== type) return false;
+    if (hazard && !(f.hazardRating || "").toLowerCase().includes(hazard.toLowerCase())) return false;
+    if (kidOnly && !kfMap[f.id]) return false;
+    if (q) {
+      const hay = ((f.facilityName||"") + " " + (f.siteAddress||"")).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+
+  activeIdx = null;
+  closeDetail();
+  renderMarkers();
+  renderList();
+  updateStats();
+
+  const pts = filtered.filter(f => f.latitude && f.longitude).map(f => [f.latitude, f.longitude]);
+  if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 14, animate: true });
+}
+
+function updateStats() {
+  const kfCount = allData.filter(f => isKidFriendly(f.id)).length;
+  document.getElementById("statShowing").textContent = filtered.length.toLocaleString();
+  document.getElementById("statTotal").textContent   = allData.length.toLocaleString();
+  document.getElementById("statKidCount").textContent = kfCount.toLocaleString();
+  document.getElementById("statKid").style.display = kfCount > 0 ? "inline" : "none";
+}
+
+function populateFilters() {
+  const communities = [...new Set(allData.map(f => f.community).filter(Boolean))].sort();
+  const types       = [...new Set(allData.map(f => f.facilityType).filter(Boolean))].sort();
+  const cSel = document.getElementById("communityFilter");
+  communities.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; cSel.appendChild(o); });
+  const tSel = document.getElementById("typeFilter");
+  types.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tSel.appendChild(o); });
+}
+
+/* ── Load data ── */
+async function fetchAll() {
+  const [facResp, inspResp, detailResp] = await Promise.all([
+    fetch("/static/vch_restaurants.json"),
+    fetch("/static/vch_restaurant_inspections.json"),
+    fetch("/static/vch_restaurant_inspection_details.json"),
+  ]);
+  if (!facResp.ok)    throw new Error(`Restaurants: HTTP ${facResp.status}`);
+  if (!inspResp.ok)   throw new Error(`Inspections: HTTP ${inspResp.status}`);
+  if (!detailResp.ok) throw new Error(`Details: HTTP ${detailResp.status}`);
+
+  const facData    = await facResp.json();
+  const inspData   = await inspResp.json();
+  const detailData = await detailResp.json();
+
+  const facilities  = Array.isArray(facData)    ? facData    : (facData.result    || []);
+  const inspections = Array.isArray(inspData)   ? inspData   : (inspData.result   || []);
+  const details     = Array.isArray(detailData) ? detailData : (detailData.result || []);
+
+  // Merge details into inspections by inspection id
+  const detailsById = {};
+  details.forEach(d => { if (d.id) detailsById[d.id] = d; });
+
+  const merged = inspections.map(insp => {
+    const detail = detailsById[insp.id] || {};
+    return {
+      ...insp,
+      nonCriticalInfractionCount: detail.nonCriticalInfractionCount ?? insp.nonCriticalInfractionCount,
+      criticalInfractionCount:    detail.criticalInfractionCount    ?? insp.criticalInfractionCount,
+      hasInfractions:             detail.hasInfractions             ?? insp.hasInfractions,
+      actionsTakenList:           insp.actionsTakenList             ?? detail.actionsTakenList,
+    };
+  });
+
+  // Group by facilityId, sorted newest first
+  inspectionsByFacility = {};
+  merged.forEach(insp => {
+    const fid = insp._facilityId;
+    if (!fid) return;
+    if (!inspectionsByFacility[fid]) inspectionsByFacility[fid] = [];
+    inspectionsByFacility[fid].push(insp);
+  });
+  Object.keys(inspectionsByFacility).forEach(fid => {
+    inspectionsByFacility[fid].sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate));
+  });
+
+  return facilities;
+}
+
+/* ── Boot ── */
+document.getElementById("searchInput").addEventListener("input", applyFilters);
+document.getElementById("communityFilter").addEventListener("change", applyFilters);
+document.getElementById("typeFilter").addEventListener("change", applyFilters);
+document.getElementById("hazardFilter").addEventListener("change", applyFilters);
+
+async function init() {
+  initMap();
+  try {
+    allData = await fetchAll();
+  } catch(e) {
+    document.getElementById("loading").innerHTML = `
+      <div style="text-align:center;max-width:360px;padding:2rem">
+        <div style="font-size:32px;margin-bottom:12px">⚠️</div>
+        <p style="font-weight:600;margin-bottom:6px">Could not load data</p>
+        <p style="font-size:13px;color:#888">Make sure vch_restaurants.json, vch_restaurant_inspections.json and vch_restaurant_inspection_details.json are in your static/ folder.</p>
+      </div>`;
+    return;
+  }
+  filtered = [...allData];
+  populateFilters();
+  renderMarkers();
+  renderList();
+  updateStats();
+  const ov = document.getElementById("loading");
+  ov.classList.add("hidden");
+  setTimeout(() => ov.remove(), 400);
+}
+
+init();
+</script>
+</body>
+</html>
