@@ -279,6 +279,28 @@
   .spinner { width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #3a8a3a; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Wildlife */
+  .wildlife-group { margin-bottom: 10px; }
+  .wildlife-group-title {
+    font-size: 10px; font-weight: 600; color: #888;
+    text-transform: uppercase; letter-spacing: 0.04em;
+    margin-bottom: 5px;
+  }
+  .wildlife-item {
+    display: flex; gap: 8px; align-items: center;
+    padding: 5px 0; border-bottom: 0.5px solid #f0f0f0;
+    font-size: 12px;
+  }
+  .wildlife-item:last-child { border-bottom: none; }
+  .wildlife-photo {
+    width: 36px; height: 36px; border-radius: 6px;
+    object-fit: cover; flex-shrink: 0;
+    background: #f0f0f0;
+  }
+  .wildlife-name { font-weight: 500; color: #222; }
+  .wildlife-date { font-size: 10px; color: #aaa; margin-top: 1px; }
+  .wildlife-none { font-size: 12px; color: #aaa; padding: 4px 0; }
+
   @media (max-width: 700px) {
     .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
     .map-wrap { height: 380px; }
@@ -390,6 +412,16 @@
         <div class="detail-row"><span class="lbl">Neighbourhood</span><span id="detailNeighbourhood"></span></div>
         <div class="detail-row"><span class="lbl">Size</span><span id="detailSize"></span></div>
         <div class="detail-row" id="detailNbrUrl"></div>
+      </div>
+
+      <div class="detail-section" id="wildlifeSection">
+        <div class="detail-section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>🐾 Recently Spotted Wildlife</span>
+          <span style="font-size:10px;color:#aaa;font-weight:400">via iNaturalist</span>
+        </div>
+        <div id="wildlifeContent">
+          <div style="font-size:12px;color:#aaa;padding:4px 0">Loading...</div>
+        </div>
       </div>
     </div>
   </div>
@@ -676,6 +708,16 @@ function selectPark(idx, fromMap) {
   }
 
   document.getElementById("detailCard").classList.add("visible");
+
+  // Fetch wildlife if we have coordinates
+  const wLat = park.googlemapdest?.lat;
+  const wLon = park.googlemapdest?.lon;
+  if (wLat && wLon) {
+    fetchWildlife(wLat, wLon, park.parkid);
+  } else {
+    document.getElementById("wildlifeContent").innerHTML =
+      `<div class="wildlife-none">No coordinates available for this park.</div>`;
+  }
 }
 
 function closeDetail() {
@@ -1012,6 +1054,102 @@ async function fetchAll() {
   }
 
   return parksData;
+}
+
+// ── Wildlife from iNaturalist ──────────────────────────────────────────────
+
+const TAXON_GROUPS = [
+  { name: "🐦 Birds",    taxon: "Aves" },
+  { name: "🐿️ Mammals", taxon: "Mammalia" },
+  { name: "🦋 Insects",  taxon: "Insecta" },
+  { name: "🦎 Reptiles", taxon: "Reptilia" },
+];
+
+const wildlifeCache = {};  // parkid → data
+
+function timeAgo(dateStr) {
+  if (!dateStr) return "";
+  const days = Math.floor((Date.now() - new Date(dateStr)) / 86400000);
+  if (days === 0) return "today";
+  if (days === 1) return "yesterday";
+  if (days < 7)  return `${days} days ago`;
+  if (days < 30) return `${Math.floor(days/7)} weeks ago`;
+  if (days < 365) return `${Math.floor(days/30)} months ago`;
+  return `${Math.floor(days/365)} years ago`;
+}
+
+async function fetchWildlife(lat, lon, parkid) {
+  if (wildlifeCache[parkid]) {
+    renderWildlife(wildlifeCache[parkid]);
+    return;
+  }
+
+  document.getElementById("wildlifeContent").innerHTML =
+    `<div style="font-size:12px;color:#aaa;padding:4px 0">🔍 Looking up wildlife sightings...</div>`;
+
+  const results = {};
+
+  await Promise.all(TAXON_GROUPS.map(async ({ name, taxon }) => {
+    try {
+      const resp = await fetch(
+        `https://api.inaturalist.org/v1/observations?` +
+        `lat=${lat}&lng=${lon}&radius=0.5` +
+        `&iconic_taxa=${taxon}&quality_grade=research` +
+        `&order=desc&order_by=observed_on&per_page=5` +
+        `&photos=true`
+      );
+      const data = await resp.json();
+      const obs  = (data.results || []).filter(o =>
+        o.taxon?.preferred_common_name || o.taxon?.name
+      );
+      if (obs.length) results[name] = obs;
+    } catch(e) {
+      console.warn(`iNaturalist error for ${taxon}:`, e);
+    }
+  }));
+
+  wildlifeCache[parkid] = results;
+  renderWildlife(results);
+}
+
+function renderWildlife(results) {
+  const el = document.getElementById("wildlifeContent");
+  const groups = Object.entries(results);
+
+  if (!groups.length) {
+    el.innerHTML = `<div class="wildlife-none">No recent sightings found nearby.<br>
+      <a href="https://www.inaturalist.org" target="_blank" rel="noopener"
+         style="color:#4a90e2;font-size:11px">Add a sighting on iNaturalist ↗</a>
+    </div>`;
+    return;
+  }
+
+  el.innerHTML = groups.map(([groupName, obs]) => `
+    <div class="wildlife-group">
+      <div class="wildlife-group-title">${groupName}</div>
+      ${obs.map(o => {
+        const common = o.taxon?.preferred_common_name || o.taxon?.name || "Unknown";
+        const sci    = o.taxon?.name || "";
+        const photo  = o.photos?.[0]?.url?.replace("square","thumb") || "";
+        const date   = timeAgo(o.observed_on);
+        return `<div class="wildlife-item">
+          ${photo
+            ? `<img class="wildlife-photo" src="${photo}" alt="${common}" onerror="this.style.display='none'">`
+            : `<div class="wildlife-photo" style="display:flex;align-items:center;justify-content:center;font-size:18px">🐾</div>`
+          }
+          <div>
+            <div class="wildlife-name">${common}</div>
+            <div class="wildlife-date"><em>${sci}</em>${date ? " · " + date : ""}</div>
+          </div>
+        </div>`;
+      }).join("")}
+    </div>
+  `).join("") + `<div style="margin-top:6px">
+    <a href="https://www.inaturalist.org/observations?place_id=any&lat=${results._lat||''}&lng=${results._lng||''}&radius=1"
+       target="_blank" rel="noopener" style="color:#4a90e2;font-size:11px">
+      View all on iNaturalist ↗
+    </a>
+  </div>`;
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────

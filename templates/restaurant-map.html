@@ -68,6 +68,67 @@
   .filters-bar input:focus,
   .filters-bar select:focus { border-color: #4a90e2; background: #fff; }
 
+  /* Area picker */
+  .area-picker {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.85rem 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .area-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .area-chip {
+    padding: 6px 14px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #fafafa;
+    color: #333;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .area-chip:hover  { border-color: #4a90e2; background: #f0f6ff; color: #4a90e2; }
+  .area-chip.active { background: #4a90e2; color: #fff; border-color: #4a90e2; font-weight: 500; }
+
+  .back-btn {
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    cursor: pointer;
+    font-family: inherit;
+    color: #555;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .back-btn:hover { border-color: #4a90e2; color: #4a90e2; }
+
+  /* Empty state */
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    color: #aaa;
+    font-size: 14px;
+    gap: 8px;
+    padding: 2rem;
+    text-align: center;
+  }
+  .empty-state .icon { font-size: 48px; }
+
   /* Kid-friendly toggle */
   .kid-toggle {
     display: flex;
@@ -186,6 +247,30 @@
     text-align: center;
     border-top: 1px solid #f0f0f0;
     background: #fafafa;
+  }
+
+  .load-more-btn {
+    width: 100%;
+    padding: 10px;
+    background: #f0f6ff;
+    border: none;
+    border-top: 1px solid #dde8f8;
+    color: #4a90e2;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    font-family: inherit;
+    transition: background 0.15s;
+  }
+  .load-more-btn:hover { background: #dde8f8; }
+
+  #loadMoreSpinner {
+    display: none;
+    padding: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: #aaa;
+    border-top: 1px solid #f0f0f0;
   }
 
   /* ── Map ── */
@@ -357,11 +442,19 @@
   <p>Health-inspected restaurants in Greater Vancouver — Vancouver Coastal Health</p>
 </div>
 
-<div class="filters-bar">
-  <input type="text" id="searchInput" placeholder="🔍 Search name or address...">
-  <select id="communityFilter"><option value="">All communities</option></select>
-  <select id="typeFilter"><option value="">All types</option></select>
-  <select id="hazardFilter">
+<!-- Area picker — shown first, other filters hidden until area selected -->
+<div class="area-picker" id="areaPicker">
+  <span style="font-size:13px;color:#555;font-weight:500">📍 Select an area to explore restaurants:</span>
+  <div class="area-chips" id="areaChips">
+    <div style="font-size:12px;color:#aaa">Loading areas...</div>
+  </div>
+</div>
+
+<div class="filters-bar" id="filtersBar" style="display:none">
+  <button class="back-btn" onclick="clearArea()">← Change area</button>
+  <input type="text" id="searchInput" placeholder="🔍 Search name or address..." oninput="applyFilters()">
+  <select id="typeFilter" onchange="applyFilters()"><option value="">All types</option></select>
+  <select id="hazardFilter" onchange="applyFilters()">
     <option value="">All hazard ratings</option>
     <option value="Low">🟢 Low</option>
     <option value="Moderate">🟡 Moderate</option>
@@ -385,7 +478,19 @@
 </div>
 
 <div class="main">
-  <div class="facility-list" id="facilityList"></div>
+  <div style="display:flex;flex-direction:column;height:100%;overflow:hidden;background:#fff;border-right:1px solid #e0e0e0">
+    <div class="facility-list" id="facilityList" style="flex:1;overflow-y:auto">
+      <div class="empty-state" id="emptyState">
+        <div class="icon">🍽️</div>
+        <div>Select an area above to explore restaurants</div>
+      </div>
+    </div>
+    <div id="loadMoreSpinner">⏳ Loading more...</div>
+    <button class="load-more-btn" id="loadMoreBtn" onclick="loadNextPage()" style="display:none">
+      Load more restaurants
+    </button>
+    <div class="list-footer" id="listFooter"></div>
+  </div>
   <div class="map-wrap">
     <div id="map"></div>
     <div class="detail-card" id="detailCard">
@@ -526,9 +631,21 @@ function renderList() {
         ${kf ? `<span class="kid-badge">👶 Kid-friendly</span>` : ""}
       </div>
     </div>`;
-  }).join("") + (filtered.length > 300
-    ? `<div class="list-footer">Showing 300 of ${filtered.length}. Use filters to narrow results.</div>`
-    : `<div class="list-footer">${filtered.length} restaurant${filtered.length===1?"":"s"}</div>`);
+  }).join("");
+
+  // Show load more button if more data exists on server
+  const loadMoreBtn = document.getElementById("loadMoreBtn");
+  const listFooter  = document.getElementById("listFooter");
+  const hasMore     = totalCount === null || allData.length < totalCount;
+
+  if (hasMore) {
+    loadMoreBtn.style.display = "block";
+    loadMoreBtn.textContent   = `Load more (${allData.length} of ${totalCount || "?"} loaded)`;
+  } else {
+    loadMoreBtn.style.display = "none";
+  }
+
+  listFooter.textContent = `${filtered.length} restaurant${filtered.length===1?"":"s"} shown`;
 }
 
 /* ── Select a facility ── */
@@ -579,8 +696,13 @@ function selectFacility(idx, fromMap) {
   document.getElementById("kidCheckbox").checked = kf;
   document.getElementById("kidToggleDetail").dataset.facilityId = f.id;
 
-  renderInspections(f.id);
-  document.getElementById("detailCard").classList.add("visible");
+  // Load inspections lazily when facility is selected
+  // document.getElementById("detailInspections").innerHTML =
+  //   `<div class="insp-header">Inspection History</div>
+  //    <div style="font-size:12px;color:#aaa;padding:4px 0">Loading...</div>`;
+  // document.getElementById("detailCard").classList.add("visible");
+
+  // fetchInspectionsForFacility(f.id).then(() => renderInspections(f.id));
 }
 
 /* ── Kid-friendly toggle ── */
@@ -639,12 +761,18 @@ function renderInspections(facilityId) {
 }
 
 /* ── Filters ── */
-function applyFilters() {
+function applyFilters(resetPage = true) {
   const q         = document.getElementById("searchInput").value.toLowerCase();
   const community = document.getElementById("communityFilter").value;
   const type      = document.getElementById("typeFilter").value;
   const hazard    = document.getElementById("hazardFilter").value;
   const kidOnly   = document.getElementById("kidToggle").checked;
+
+  // Track active filters for server-side queries
+  activeFilters = {};
+  if (community) activeFilters.community = community;
+  if (q)         activeFilters.q = q;
+  if (resetPage) { currentPage = 0; }
 
   // Update kid toggle label style
   const kidLabel = document.getElementById("kidToggleLabel");
@@ -682,62 +810,78 @@ function updateStats() {
   document.getElementById("statKid").style.display = kfCount > 0 ? "inline" : "none";
 }
 
-function populateFilters() {
-  const communities = [...new Set(allData.map(f => f.community).filter(Boolean))].sort();
-  const types       = [...new Set(allData.map(f => f.facilityType).filter(Boolean))].sort();
-  const cSel = document.getElementById("communityFilter");
-  communities.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; cSel.appendChild(o); });
-  const tSel = document.getElementById("typeFilter");
-  types.forEach(t => { const o = document.createElement("option"); o.value = t; o.textContent = t; tSel.appendChild(o); });
+// populateFilters replaced by populateTypeFilter above
+
+/* ── Load data — lazy loading strategy ── */
+// Only fetch first page on load. More pages load as user scrolls/filters.
+
+let currentPage   = 0;
+let totalCount    = null;
+let isLoadingMore = false;
+let activeFilters = {};
+
+async function fetchPage(page, params = {}) {
+  const qs = new URLSearchParams({
+    page,
+    page_size: 50,
+    ...params,
+  });
+  const resp = await fetch(`/api/vch/restaurants/facilities?${qs}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
 }
 
-/* ── Load data ── */
 async function fetchAll() {
-  const [facResp, inspResp, detailResp] = await Promise.all([
-    fetch("/static/vch_restaurants.json"),
-    fetch("/static/vch_restaurant_inspections.json"),
-    fetch("/static/vch_restaurant_inspection_details.json"),
-  ]);
-  if (!facResp.ok)    throw new Error(`Restaurants: HTTP ${facResp.status}`);
-  if (!inspResp.ok)   throw new Error(`Inspections: HTTP ${inspResp.status}`);
-  if (!detailResp.ok) throw new Error(`Details: HTTP ${detailResp.status}`);
+  // Only load first page on startup — fast!
+  const data    = await fetchPage(0);
+  totalCount    = data.total;
+  currentPage   = 0;
+  return data.result || [];
+}
 
-  const facData    = await facResp.json();
-  const inspData   = await inspResp.json();
-  const detailData = await detailResp.json();
+async function loadNextPage() {
+  if (isLoadingMore) return;
+  if (totalCount !== null && allData.length >= totalCount) return;
 
-  const facilities  = Array.isArray(facData)    ? facData    : (facData.result    || []);
-  const inspections = Array.isArray(inspData)   ? inspData   : (inspData.result   || []);
-  const details     = Array.isArray(detailData) ? detailData : (detailData.result || []);
+  isLoadingMore = true;
+  showLoadMoreSpinner(true);
+  try {
+    currentPage++;
+    const data = await fetchPage(currentPage, activeFilters);
+    const newItems = data.result || [];
+    if (newItems.length) {
+      allData = allData.concat(newItems);
+      // Re-apply current filters to include new items
+      applyFilters(false); // false = don't reset page
+    }
+  } catch(e) {
+    console.warn("Failed to load more:", e);
+    currentPage--;
+  } finally {
+    isLoadingMore = false;
+    showLoadMoreSpinner(false);
+  }
+}
 
-  // Merge details into inspections by inspection id
-  const detailsById = {};
-  details.forEach(d => { if (d.id) detailsById[d.id] = d; });
+function showLoadMoreSpinner(show) {
+  const el = document.getElementById("loadMoreSpinner");
+  if (el) el.style.display = show ? "block" : "none";
+}
 
-  const merged = inspections.map(insp => {
-    const detail = detailsById[insp.id] || {};
-    return {
-      ...insp,
-      nonCriticalInfractionCount: detail.nonCriticalInfractionCount ?? insp.nonCriticalInfractionCount,
-      criticalInfractionCount:    detail.criticalInfractionCount    ?? insp.criticalInfractionCount,
-      hasInfractions:             detail.hasInfractions             ?? insp.hasInfractions,
-      actionsTakenList:           insp.actionsTakenList             ?? detail.actionsTakenList,
-    };
-  });
-
-  // Group by facilityId, sorted newest first
-  inspectionsByFacility = {};
-  merged.forEach(insp => {
-    const fid = insp._facilityId;
-    if (!fid) return;
-    if (!inspectionsByFacility[fid]) inspectionsByFacility[fid] = [];
-    inspectionsByFacility[fid].push(insp);
-  });
-  Object.keys(inspectionsByFacility).forEach(fid => {
-    inspectionsByFacility[fid].sort((a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate));
-  });
-
-  return facilities;
+// Fetch inspections lazily when user clicks a restaurant
+async function fetchInspectionsForFacility(facilityId) {
+  if (inspectionsByFacility[facilityId] !== undefined) return;
+  try {
+    const resp = await fetch(`/api/vch/restaurants/facility/${facilityId}/inspections`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    inspectionsByFacility[facilityId] = (data.result || []).sort(
+      (a, b) => new Date(b.inspectionDate) - new Date(a.inspectionDate)
+    );
+  } catch(e) {
+    console.warn("Failed to load inspections:", e);
+    inspectionsByFacility[facilityId] = [];
+  }
 }
 
 /* ── Boot ── */
@@ -746,27 +890,202 @@ document.getElementById("communityFilter").addEventListener("change", applyFilte
 document.getElementById("typeFilter").addEventListener("change", applyFilters);
 document.getElementById("hazardFilter").addEventListener("change", applyFilters);
 
+// ── Area-based loading ─────────────────────────────────────────────────────
+
+// Known VCH communities in Greater Vancouver — fetched dynamically on load
+// Exact community names from VCH API
+const VANCOUVER_COMMUNITIES = [
+  // Vancouver
+  "Vancouver - City Centre",
+  "Vancouver - Downtown",
+  "Vancouver - Eastside",
+  "Vancouver - Fairview",
+  "Vancouver - Grandview",
+  "Vancouver - Hastings",
+  "Vancouver - Kitsilano",
+  "Vancouver - Marpole",
+  "Vancouver - Mount Pleasant",
+  "Vancouver - Renfrew",
+  "Vancouver - Riley Park",
+  "Vancouver - Shaughnessy",
+  "Vancouver - South Cambie",
+  "Vancouver - Strathcona",
+  "Vancouver - Sunset",
+  "Vancouver - West End",
+  "Vancouver - West Point Grey",
+  // Surrounding cities
+  "Richmond",
+  "Burnaby",
+  "North Vancouver",
+  "West Vancouver",
+  "New Westminster",
+  "Coquitlam",
+  "Port Moody",
+  "Port Coquitlam",
+  "Surrey",
+  "Delta",
+  "Langley",
+  "Maple Ridge",
+  "Pitt Meadows",
+  "Squamish",
+  "Whistler",
+  "Powell River",
+  "Sunshine Coast",
+  "Sea to Sky",
+];
+
+let selectedArea = null;
+
+function buildAreaChips(communities) {
+  const chips = document.getElementById("areaChips");
+  const areas = communities.length ? communities : VANCOUVER_COMMUNITIES;
+
+  const vancouver = areas.filter(a => a.startsWith("Vancouver"));
+  const others    = areas.filter(a => !a.startsWith("Vancouver"));
+
+  chips.innerHTML = `
+    <div style="width:100%">
+      <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Vancouver</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
+        ${vancouver.map(a => `<button class="area-chip" onclick="selectArea('${a.replace(/'/g, "\'")}')">${a.replace("Vancouver - ","")}</button>`).join("")}
+      </div>
+      <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Surrounding Cities</div>
+      <div style="display:flex;flex-wrap:wrap;gap:5px">
+        ${others.map(a => `<button class="area-chip" onclick="selectArea('${a.replace(/'/g, "\'")}')">${a}</button>`).join("")}
+      </div>
+    </div>`;
+}
+
+function selectArea(area) {
+  selectedArea = area;
+
+  // Update chip styles
+  document.querySelectorAll(".area-chip").forEach(c => {
+    c.classList.toggle("active", c.textContent === area);
+  });
+
+  // Hide area picker label, show filters
+  document.getElementById("filtersBar").style.display = "flex";
+  document.getElementById("emptyState").style.display = "none";
+
+  // Clear existing data and load for this area
+  allData    = [];
+  filtered   = [];
+  currentPage = 0;
+  totalCount  = null;
+  activeFilters = { community: area };
+
+  loadArea(area);
+}
+
+function clearArea() {
+  selectedArea  = null;
+  allData       = [];
+  filtered      = [];
+  activeFilters = {};
+
+  document.getElementById("filtersBar").style.display = "none";
+  document.getElementById("facilityList").innerHTML = `
+    <div class="empty-state" id="emptyState">
+      <div class="icon">🍽️</div>
+      <div>Select an area above to explore restaurants</div>
+    </div>`;
+  document.getElementById("loadMoreBtn").style.display = "none";
+  document.getElementById("listFooter").textContent = "";
+  document.getElementById("statShowing").textContent = "—";
+  document.getElementById("statTotal").textContent   = "—";
+  document.getElementById("statKid").style.display   = "none";
+
+  // Clear map
+  renderMarkers();
+
+  // Unselect chips
+  document.querySelectorAll(".area-chip").forEach(c => c.classList.remove("active"));
+
+  // Reset map view
+  map.setView([49.25, -123.12], 11, { animate: true });
+}
+
+async function loadArea(area) {
+  // Show spinner in list
+  document.getElementById("facilityList").innerHTML =
+    `<div style="padding:2rem;text-align:center;color:#aaa;font-size:13px">
+      <div style="font-size:24px;margin-bottom:8px">⏳</div>
+      Loading restaurants in ${area}...
+    </div>`;
+  document.getElementById("loadMoreBtn").style.display = "none";
+
+  try {
+    const data = await fetchPage(0, { community: area });
+    totalCount  = data.total;
+    currentPage = 0;
+    allData     = data.result || [];
+    filtered    = [...allData];
+
+    populateTypeFilter();
+    renderMarkers();
+    renderList();
+    updateStats();
+
+    // Fit map to results
+    const pts = filtered.filter(f => f.latitude && f.longitude).map(f => [f.latitude, f.longitude]);
+    if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 14, animate: true });
+
+  } catch(e) {
+    document.getElementById("facilityList").innerHTML =
+      `<div style="padding:1.5rem;text-align:center;color:#c0392b;font-size:13px">
+        Failed to load restaurants: ${e.message}
+      </div>`;
+  }
+}
+
+async function loadNextPage() {
+  if (isLoadingMore) return;
+  if (totalCount !== null && allData.length >= totalCount) return;
+  isLoadingMore = true;
+  showLoadMoreSpinner(true);
+  try {
+    currentPage++;
+    const params = { ...activeFilters };
+    const data   = await fetchPage(currentPage, params);
+    const newItems = data.result || [];
+    if (newItems.length) {
+      allData  = allData.concat(newItems);
+      filtered = [...allData];
+      applyFilters(false);
+    }
+  } catch(e) {
+    currentPage--;
+  } finally {
+    isLoadingMore = false;
+    showLoadMoreSpinner(false);
+  }
+}
+
+function populateTypeFilter() {
+  const types = [...new Set(allData.map(f => f.facilityType).filter(Boolean))].sort();
+  const sel   = document.getElementById("typeFilter");
+  sel.innerHTML = `<option value="">All types</option>` +
+    types.map(t => `<option value="${t}">${t}</option>`).join("");
+}
+
 async function init() {
   initMap();
-  try {
-    allData = await fetchAll();
-  } catch(e) {
-    document.getElementById("loading").innerHTML = `
-      <div style="text-align:center;max-width:360px;padding:2rem">
-        <div style="font-size:32px;margin-bottom:12px">⚠️</div>
-        <p style="font-weight:600;margin-bottom:6px">Could not load data</p>
-        <p style="font-size:13px;color:#888">Make sure vch_restaurants.json, vch_restaurant_inspections.json and vch_restaurant_inspection_details.json are in your static/ folder.</p>
-      </div>`;
-    return;
-  }
-  filtered = [...allData];
-  populateFilters();
-  renderMarkers();
-  renderList();
-  updateStats();
+
+  // Hide loading overlay immediately — nothing to load yet
   const ov = document.getElementById("loading");
   ov.classList.add("hidden");
-  setTimeout(() => ov.remove(), 400);
+  setTimeout(() => ov.remove(), 300);
+
+  // Load available communities from VCH to build area chips
+  try {
+    // Fetch a small sample to discover communities
+    const data = await fetchPage(0, { page_size: 1 });
+    // Use known list since VCH doesn't expose community list directly
+    buildAreaChips([]);
+  } catch(e) {
+    buildAreaChips([]);
+  }
 }
 
 init();
