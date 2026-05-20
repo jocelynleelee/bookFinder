@@ -95,23 +95,23 @@ def query_vch_facilities(
     if not program_id:
         raise ValueError(f"Unknown program: {program}")
 
-    # Build filters list
+    # VCH API filter structure — uses matchMode + values array
     filters = []
     if community:
         filters.append({
-            "field": "community",
-            "value": community,
-            "operator": "eq",
+            "field":     "community",
+            "matchMode": "in",
+            "values":    [community],
         })
 
     payload = {
-        "pageNumber":        page,
-        "pageSize":          page_size,
-        "criteria":          criteria,
-        "sort":              [{"field": "community", "order": "asc"}],
+        "pageNumber":          page,
+        "pageSize":            page_size,
+        "criteria":            criteria,
+        "sort":                [{"field": "community", "order": "asc"}],
         "disclosureProgramId": program_id,
-        "fields":            fields or RESTAURANT_FIELDS,
-        "filters":           filters,
+        "fields":              fields or RESTAURANT_FIELDS,
+        "filters":             filters,
     }
 
     resp = requests.post(
@@ -259,6 +259,60 @@ def register_vch_routes(app: Flask):
             return jsonify({"result": detail})
         except requests.HTTPError as e:
             return jsonify({"error": str(e)}), 502
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    # ── Get all unique communities ───────────────────────────────────────────
+    # GET /api/vch/restaurants/communities
+    # Fetches all communities by getting a large page and extracting unique values
+
+    @app.route("/api/vch/<program>/communities")
+    def vch_communities(program):
+        if program not in PROGRAM_IDS:
+            return jsonify({"error": f"Unknown program: {program}"}), 400
+
+        cache_key = _cache_key("communities", program)
+        cached = _cache_get(cache_key, ttl=CACHE_TTL_FACILITIES)
+        if cached:
+            return jsonify({"communities": cached, "cached": True})
+
+        try:
+            program_id = PROGRAM_IDS[program]
+            all_communities = set()
+            page = 0
+            PAGE_SIZE = 500
+
+            # Paginate through ALL records to get every community
+            while True:
+                payload = {
+                    "pageNumber":          page,
+                    "pageSize":            PAGE_SIZE,
+                    "criteria":            "",
+                    "sort":                [{"field": "community", "order": "asc"}],
+                    "disclosureProgramId": program_id,
+                    "fields":              ["community"],
+                    "filters":             [],
+                }
+                resp = requests.post(VCH_FACILITIES_URL, json=payload, headers=VCH_HEADERS, timeout=15)
+                resp.raise_for_status()
+                data = resp.json()
+                results = data.get("result", [])
+
+                for r in results:
+                    if r.get("community"):
+                        all_communities.add(r["community"])
+
+                total = data.get("total") or data.get("totalCount") or data.get("totalNumberOfRecords") or 0
+                fetched_so_far = (page + 1) * PAGE_SIZE
+
+                if not results or fetched_so_far >= int(total) or len(results) < PAGE_SIZE:
+                    break
+                page += 1
+
+            communities = sorted(all_communities)
+            _cache_set(cache_key, communities)
+            return jsonify({"communities": communities})
+
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

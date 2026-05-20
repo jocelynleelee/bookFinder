@@ -697,12 +697,12 @@ function selectFacility(idx, fromMap) {
   document.getElementById("kidToggleDetail").dataset.facilityId = f.id;
 
   // Load inspections lazily when facility is selected
-  // document.getElementById("detailInspections").innerHTML =
-  //   `<div class="insp-header">Inspection History</div>
-  //    <div style="font-size:12px;color:#aaa;padding:4px 0">Loading...</div>`;
-  // document.getElementById("detailCard").classList.add("visible");
+  document.getElementById("detailInspections").innerHTML =
+    `<div class="insp-header">Last 3 Inspections</div>
+     <div style="font-size:12px;color:#aaa;padding:4px 0">Loading...</div>`;
+  document.getElementById("detailCard").classList.add("visible");
 
-  // fetchInspectionsForFacility(f.id).then(() => renderInspections(f.id));
+  fetchInspectionsForFacility(f.id).then(() => renderInspections(f.id));
 }
 
 /* ── Kid-friendly toggle ── */
@@ -738,7 +738,7 @@ function renderInspections(facilityId) {
   const inspections = inspectionsByFacility[facilityId] || [];
   const el = document.getElementById("detailInspections");
   if (!inspections.length) {
-    el.innerHTML = `<div class="insp-header">Inspection History</div><div style="font-size:12px;color:#aaa">No inspection records found.</div>`;
+    el.innerHTML = `<div class="insp-header">Last 3 Inspections</div><div style="font-size:12px;color:#aaa">No inspection records found.</div>`;
     return;
   }
   const rows = inspections.map(insp => {
@@ -757,36 +757,32 @@ function renderInspections(facilityId) {
       ${actions ? `<ul class="insp-actions">${actions}</ul>` : ""}
     </div>`;
   }).join("");
-  el.innerHTML = `<div class="insp-header">Inspection History</div>${rows}`;
+  el.innerHTML = `<div class="insp-header">Last 3 Inspections</div>${rows}`;
 }
 
 /* ── Filters ── */
 function applyFilters(resetPage = true) {
-  const q         = document.getElementById("searchInput").value.toLowerCase();
-  const community = document.getElementById("communityFilter").value;
-  const type      = document.getElementById("typeFilter").value;
-  const hazard    = document.getElementById("hazardFilter").value;
-  const kidOnly   = document.getElementById("kidToggle").checked;
+  const q       = document.getElementById("searchInput").value.toLowerCase();
+  const type    = document.getElementById("typeFilter").value;
+  const hazard  = document.getElementById("hazardFilter").value;
+  const kidOnly = document.getElementById("kidToggle").checked;
 
-  // Track active filters for server-side queries
-  activeFilters = {};
-  if (community) activeFilters.community = community;
-  if (q)         activeFilters.q = q;
-  if (resetPage) { currentPage = 0; }
+  // Keep community filter always tied to selected area
+  activeFilters = { community: selectedArea || "" };
+  if (resetPage) currentPage = 0;
 
   // Update kid toggle label style
-  const kidLabel = document.getElementById("kidToggleLabel");
-  kidLabel.classList.toggle("active", kidOnly);
+  document.getElementById("kidToggleLabel").classList.toggle("active", kidOnly);
 
   const kfMap = getKidFriendly();
 
+  // Filter client-side within the already-loaded area data
   filtered = allData.filter(f => {
-    if (community && f.community !== community) return false;
-    if (type && f.facilityType !== type) return false;
+    if (type   && f.facilityType !== type) return false;
     if (hazard && !(f.hazardRating || "").toLowerCase().includes(hazard.toLowerCase())) return false;
     if (kidOnly && !kfMap[f.id]) return false;
     if (q) {
-      const hay = ((f.facilityName||"") + " " + (f.siteAddress||"")).toLowerCase();
+      const hay = ((f.facilityName || "") + " " + (f.siteAddress || "")).toLowerCase();
       if (!hay.includes(q)) return false;
     }
     return true;
@@ -798,8 +794,11 @@ function applyFilters(resetPage = true) {
   renderList();
   updateStats();
 
-  const pts = filtered.filter(f => f.latitude && f.longitude).map(f => [f.latitude, f.longitude]);
-  if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 14, animate: true });
+  // Only refit map if filters changed (not on every keystroke)
+  if (!q) {
+    const pts = filtered.filter(f => f.latitude && f.longitude).map(f => [f.latitude, f.longitude]);
+    if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 14, animate: true });
+  }
 }
 
 function updateStats() {
@@ -886,7 +885,6 @@ async function fetchInspectionsForFacility(facilityId) {
 
 /* ── Boot ── */
 document.getElementById("searchInput").addEventListener("input", applyFilters);
-document.getElementById("communityFilter").addEventListener("change", applyFilters);
 document.getElementById("typeFilter").addEventListener("change", applyFilters);
 document.getElementById("hazardFilter").addEventListener("change", applyFilters);
 
@@ -938,41 +936,56 @@ let selectedArea = null;
 
 function buildAreaChips(communities) {
   const chips = document.getElementById("areaChips");
-  const areas = communities.length ? communities : VANCOUVER_COMMUNITIES;
 
-  const vancouver = areas.filter(a => a.startsWith("Vancouver"));
-  const others    = areas.filter(a => !a.startsWith("Vancouver"));
+  const vancouver = communities.filter(a => a.toLowerCase().includes("vancouver"));
+  const others    = communities.filter(a => !a.toLowerCase().includes("vancouver"));
+
+  function makeChips(areas) {
+    return areas.map(a => {
+      const label = a.startsWith("Vancouver - ") ? a.replace("Vancouver - ", "") : a;
+      return `<button class="area-chip" data-area="${a}" onclick="selectArea('${a.replace(/'/g, "\'")}')">${label}</button>`;
+    }).join("");
+  }
 
   chips.innerHTML = `
     <div style="width:100%">
-      <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Vancouver</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">
-        ${vancouver.map(a => `<button class="area-chip" onclick="selectArea('${a.replace(/'/g, "\'")}')">${a.replace("Vancouver - ","")}</button>`).join("")}
-      </div>
-      <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Surrounding Cities</div>
-      <div style="display:flex;flex-wrap:wrap;gap:5px">
-        ${others.map(a => `<button class="area-chip" onclick="selectArea('${a.replace(/'/g, "\'")}')">${a}</button>`).join("")}
-      </div>
+      ${vancouver.length ? `
+        <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Vancouver</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${makeChips(vancouver)}</div>
+      ` : ""}
+      ${others.length ? `
+        <div style="font-size:10px;font-weight:600;color:#aaa;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:5px">Surrounding Areas</div>
+        <div style="display:flex;flex-wrap:wrap;gap:5px">${makeChips(others)}</div>
+      ` : ""}
     </div>`;
 }
 
 function selectArea(area) {
+  // Don't reload if same area already selected
+  if (selectedArea === area) return;
   selectedArea = area;
 
-  // Update chip styles
+  // Update chip styles — match on data-area attribute
   document.querySelectorAll(".area-chip").forEach(c => {
-    c.classList.toggle("active", c.textContent === area);
+    c.classList.toggle("active", c.dataset.area === area);
   });
 
-  // Hide area picker label, show filters
+  // Show filters bar, hide empty state
   document.getElementById("filtersBar").style.display = "flex";
-  document.getElementById("emptyState").style.display = "none";
+  document.getElementById("emptyState") && (document.getElementById("emptyState").style.display = "none");
 
-  // Clear existing data and load for this area
-  allData    = [];
-  filtered   = [];
-  currentPage = 0;
-  totalCount  = null;
+  // Reset search/filter inputs when switching area
+  document.getElementById("searchInput").value = "";
+  document.getElementById("typeFilter").value  = "";
+  document.getElementById("hazardFilter").value = "";
+  document.getElementById("kidToggle").checked  = false;
+  document.getElementById("kidToggleLabel").classList.remove("active");
+
+  // Clear existing data and reload for new area
+  allData       = [];
+  filtered      = [];
+  currentPage   = 0;
+  totalCount    = null;
   activeFilters = { community: area };
 
   loadArea(area);
@@ -1072,19 +1085,28 @@ function populateTypeFilter() {
 async function init() {
   initMap();
 
-  // Hide loading overlay immediately — nothing to load yet
+  // Hide loading overlay
   const ov = document.getElementById("loading");
   ov.classList.add("hidden");
   setTimeout(() => ov.remove(), 300);
 
-  // Load available communities from VCH to build area chips
+  // Fetch real community names from VCH via Flask
   try {
-    // Fetch a small sample to discover communities
-    const data = await fetchPage(0, { page_size: 1 });
-    // Use known list since VCH doesn't expose community list directly
-    buildAreaChips([]);
+    const resp = await fetch("/api/vch/restaurants/communities");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    const communities = data.communities || [];
+    buildAreaChips(communities);
+
+    // Auto-select first Vancouver community as default
+    const defaultArea = communities.find(c => c.toLowerCase().includes("vancouver")) || communities[0];
+    if (defaultArea) selectArea(defaultArea);
+
   } catch(e) {
-    buildAreaChips([]);
+    console.warn("Could not fetch communities:", e);
+    // Fall back to hardcoded list
+    buildAreaChips(VANCOUVER_COMMUNITIES);
+    selectArea("Vancouver - City Centre");
   }
 }
 
