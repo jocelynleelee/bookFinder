@@ -9,6 +9,7 @@ from sqlalchemy.orm import sessionmaker
 from models import Book, LibraryHistory
 # from childcare_routes import register_childcare_routes
 from vch_routes import register_vch_routes
+from transit_routes import register_translink_routes
 # ──────────────────────────────────────────
 # App & DB setup
 # ──────────────────────────────────────────
@@ -18,6 +19,7 @@ DATABASE_URL = "postgresql://kidbookdb_g3bi_user:NvS4CNu0BX2I1RIZrZOTHMMfqmC3AmQ
 app = Flask(__name__)
 CORS(app)
 register_vch_routes(app)
+register_translink_routes(app)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine)
 
@@ -561,6 +563,13 @@ def admin_ingest_outlet():
 def parks():
     return render_template("parks-map.html")
 
+@app.route("/transit")
+def transit_page():
+    return render_template("transit.html")
+
+@app.route("/farms")
+def farms():
+    return render_template("farms-map.html")
 # ──────────────────────────────────────────
 # Error handlers
 # ──────────────────────────────────────────

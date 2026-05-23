@@ -279,6 +279,29 @@
   .spinner { width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #3a8a3a; border-radius: 50%; animation: spin 0.8s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  /* Transit stops */
+  .stop-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 6px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+    font-size: 12px;
+    gap: 8px;
+  }
+  .stop-item:last-child { border-bottom: none; }
+  .stop-name { color: #333; font-weight: 500; flex: 1; }
+  .stop-dist { color: #aaa; font-size: 11px; white-space: nowrap; }
+  .stop-routes { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 3px; }
+  .route-tag {
+    font-size: 10px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    background: #001f4d;
+    color: #fff;
+    font-weight: 500;
+  }
+
   /* Wildlife */
   .wildlife-group { margin-bottom: 10px; }
   .wildlife-group-title {
@@ -300,6 +323,33 @@
   .wildlife-name { font-weight: 500; color: #222; }
   .wildlife-date { font-size: 10px; color: #aaa; margin-top: 1px; }
   .wildlife-none { font-size: 12px; color: #aaa; padding: 4px 0; }
+
+  /* Transit */
+  .transit-bar {
+    display: none;
+    background: #001f4d;
+    color: #fff;
+    padding: 6px 1.5rem;
+    font-size: 12px;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .transit-bar.visible { display: flex; }
+  .transit-stat { opacity: 0.8; }
+  .transit-stat strong { color: #7eb8f7; }
+  .transit-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+    animation: pulse 1.5s infinite;
+  }
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.3; }
+  }
 
   @media (max-width: 700px) {
     .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
@@ -324,7 +374,8 @@
   <a href="/schedule">📅 Schedule</a>
   <a href="/childcare-map">🏫 Child Care</a>
   <a href="/restaurants">🍽️ Restaurants</a>
-  <a href="/parks" class="active">🌳 Parks</a>
+  <a href="/parks">🌳 Parks</a>
+  <a href="/farms">🐄 Farms</a>
 </nav>
 
 <div class="page-header">
@@ -335,7 +386,17 @@
   <div class="view-toggle">
     <button class="view-btn active" id="btnMap" onclick="switchView('map')">🗺️ Map</button>
     <button class="view-btn" id="btnCharts" onclick="switchView('charts')">📊 Charts</button>
+    <button class="view-btn" id="btnTransit" onclick="toggleTransit()" style="background:#fafafa">🚌 Live Transit</button>
   </div>
+</div>
+
+<div class="transit-bar" id="transitBar">
+  <span><span class="transit-dot" style="background:#00e676"></span>Live Transit</span>
+  <span class="transit-stat">Vehicles: <strong id="transitCount">—</strong></span>
+  <span class="transit-stat">Buses: <strong id="transitBuses">—</strong></span>
+  <span class="transit-stat">SkyTrain: <strong id="transitSkytrain">—</strong></span>
+  <span class="transit-stat">Last update: <strong id="transitUpdated">—</strong></span>
+  <span style="margin-left:auto;opacity:0.6;font-size:11px">Updates every 10s</span>
 </div>
 
 <div class="filters-bar">
@@ -412,6 +473,16 @@
         <div class="detail-row"><span class="lbl">Neighbourhood</span><span id="detailNeighbourhood"></span></div>
         <div class="detail-row"><span class="lbl">Size</span><span id="detailSize"></span></div>
         <div class="detail-row" id="detailNbrUrl"></div>
+      </div>
+
+      <div class="detail-section" id="transitSection">
+        <div class="detail-section-title" style="display:flex;align-items:center;justify-content:space-between">
+          <span>🚌 Nearby Transit Stops</span>
+          <span style="font-size:10px;color:#aaa;font-weight:400">within 500m</span>
+        </div>
+        <div id="transitStopsContent">
+          <div style="font-size:12px;color:#aaa">Loading stops...</div>
+        </div>
       </div>
 
       <div class="detail-section" id="wildlifeSection">
@@ -708,6 +779,11 @@ function selectPark(idx, fromMap) {
   }
 
   document.getElementById("detailCard").classList.add("visible");
+
+  // Show nearby transit stops (client-side, instant after first load)
+  const sLat = park.googlemapdest?.lat;
+  const sLon = park.googlemapdest?.lon;
+  renderNearbyStops(sLat, sLon);
 
   // Fetch wildlife if we have coordinates
   const wLat = park.googlemapdest?.lat;
@@ -1056,6 +1132,82 @@ async function fetchAll() {
   return parksData;
 }
 
+// ── Nearby Transit Stops ──────────────────────────────────────────────────
+
+let allStops = null;  // loaded once from static JSON
+
+async function loadStops() {
+  if (allStops !== null) return;
+  try {
+    const resp = await fetch("/static/translink_stops.json");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    allStops = await resp.json();
+    console.log(`Loaded ${allStops.length} TransLink stops`);
+  } catch(e) {
+    console.warn("Could not load TransLink stops:", e);
+    allStops = [];
+  }
+}
+
+function haversineDistance(lat1, lon1, lat2, lon2) {
+  // Returns distance in metres between two lat/lng points
+  const R  = 6371000;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) ** 2 +
+            Math.cos(lat1 * Math.PI / 180) *
+            Math.cos(lat2 * Math.PI / 180) *
+            Math.sin(dLon/2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+function findNearbyStops(lat, lon, radiusM = 500, maxResults = 5) {
+  if (!allStops || !allStops.length) return [];
+  return allStops
+    .map(s => ({ ...s, dist: haversineDistance(lat, lon, s.lat, s.lon) }))
+    .filter(s => s.dist <= radiusM)
+    .sort((a, b) => a.dist - b.dist)
+    .slice(0, maxResults);
+}
+
+function renderNearbyStops(lat, lon) {
+  const el = document.getElementById("transitStopsContent");
+  if (!lat || !lon) {
+    el.innerHTML = `<div style="font-size:12px;color:#aaa">No coordinates available.</div>`;
+    return;
+  }
+  if (!allStops) {
+    el.innerHTML = `<div style="font-size:12px;color:#aaa">Loading stops data...</div>`;
+    return;
+  }
+
+  const stops = findNearbyStops(lat, lon);
+  if (!stops.length) {
+    el.innerHTML = `<div style="font-size:12px;color:#aaa">No stops within 500m.</div>`;
+    return;
+  }
+
+  el.innerHTML = stops.map(s => {
+    const distStr = s.dist < 100
+      ? `${Math.round(s.dist)}m`
+      : `${(s.dist / 1000).toFixed(2)}km`;
+    const routeTags = s.routes.map(r =>
+      `<span class="route-tag">${r}</span>`
+    ).join("");
+    const tlUrl = `https://www.translink.ca/schedules-and-maps/bus-schedules`;
+    return `<div class="stop-item">
+      <div style="flex:1">
+        <div class="stop-name">${s.name}</div>
+        ${s.routes.length ? `<div class="stop-routes">${routeTags}</div>` : ""}
+      </div>
+      <span class="stop-dist">${distStr}</span>
+    </div>`;
+  }).join("") + `<div style="margin-top:6px">
+    <a href="https://www.translink.ca/trip-planner" target="_blank" rel="noopener"
+       style="color:#4a90e2;font-size:11px">Plan a trip on TransLink ↗</a>
+  </div>`;
+}
+
 // ── Wildlife from iNaturalist ──────────────────────────────────────────────
 
 const TAXON_GROUPS = [
@@ -1180,6 +1332,9 @@ async function init() {
   const ov = document.getElementById("loading");
   ov.classList.add("hidden");
   setTimeout(() => ov.remove(), 400);
+
+  // Pre-load stops in background so first click is instant
+  loadStops();
 }
 
 init();

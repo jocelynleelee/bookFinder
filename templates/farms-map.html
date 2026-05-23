@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Find farms with animals in Greater Vancouver — petting zoos, working farms, and animal encounters for families">
+<meta name="theme-color" content="#4a90e2">
+<title>Farm Finder</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a { color: #4a90e2; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  nav a.active { color: #333; font-weight: 600; }
+
+  .page-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1.2rem 1.5rem 1rem;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: #777; }
+
+  /* ── Filters ── */
+  .filters-bar {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filters-bar input,
+  .filters-bar select {
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .filters-bar input { flex: 1; min-width: 180px; }
+  .filters-bar select { min-width: 140px; cursor: pointer; }
+  .filters-bar input:focus,
+  .filters-bar select:focus { border-color: #4a90e2; background: #fff; }
+
+  .animal-filters {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .animal-chip {
+    padding: 5px 12px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 12px;
+    cursor: pointer;
+    background: #fafafa;
+    color: #555;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .animal-chip:hover { border-color: #4a90e2; background: #f0f6ff; }
+  .animal-chip.active { background: #e8f4e8; border-color: #3a8a3a; color: #2a6a2a; font-weight: 500; }
+  .animal-chip-label { font-size: 12px; color: #aaa; white-space: nowrap; margin-right: 4px; }
+
+  /* ── Stats ── */
+  .stats-row {
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #f9f9f9;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    color: #555;
+  }
+  .stat-pill { background: #e8f0fb; color: #2c6dbf; border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 500; }
+  .stat-pill-green { background: #e8f4e8; color: #2a6a2a; }
+  .stat-pill-orange { background: #fff3e0; color: #7a4f00; }
+
+  /* ── Layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    height: calc(100vh - 200px);
+  }
+
+  /* ── Farm list ── */
+  .farm-list {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+  }
+  .farm-list::-webkit-scrollbar { width: 4px; }
+  .farm-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .farm-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .farm-item:hover { background: #f0f6ff; }
+  .farm-item.active { background: #e8f4e8; border-left: 3px solid #3a8a3a; padding-left: 11px; }
+
+  .farm-name { font-size: 13px; font-weight: 600; color: #222; margin-bottom: 2px; }
+  .farm-city { font-size: 11px; color: #888; }
+  .farm-animals { display: flex; flex-wrap: wrap; gap: 3px; margin-top: 6px; }
+  .animal-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    background: #f0f6ff;
+    color: #2c6dbf;
+    font-weight: 500;
+  }
+  .entry-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .entry-free     { background: #e8f4e8; color: #2a6a2a; }
+  .entry-donation { background: #fff8e1; color: #7a5c00; }
+  .entry-paid     { background: #f0f0f0; color: #555; }
+
+  .no-results { padding: 2rem 1rem; text-align: center; color: #aaa; font-size: 13px; }
+  .list-footer { padding: 10px 14px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; background: #fafafa; }
+
+  /* ── Map ── */
+  .map-wrap { position: relative; }
+  #map { width: 100%; height: 100%; }
+
+  /* ── Detail card ── */
+  .detail-card {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 310px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 1000;
+    padding: 16px;
+  }
+  .detail-card.visible { display: block; }
+  .detail-card::-webkit-scrollbar { width: 4px; }
+  .detail-card::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
+
+  .detail-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer;
+  }
+  .detail-close:hover { color: #333; }
+
+  .detail-name { font-size: 15px; font-weight: 700; color: #222; margin-bottom: 4px; padding-right: 24px; }
+  .detail-city { font-size: 12px; color: #888; margin-bottom: 10px; }
+  .detail-tags { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  .detail-section-title {
+    font-size: 10px; font-weight: 600; color: #aaa;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin: 12px 0 6px;
+  }
+  .detail-row { font-size: 12px; color: #555; margin-bottom: 4px; display: flex; gap: 6px; }
+  .detail-row .lbl { color: #aaa; min-width: 70px; flex-shrink: 0; }
+  .detail-row a { color: #4a90e2; text-decoration: none; word-break: break-all; }
+  .detail-row a:hover { text-decoration: underline; }
+
+  .animals-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    margin-top: 4px;
+  }
+  .animal-pill {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    background: #f0f6ff;
+    color: #2c6dbf;
+    font-weight: 500;
+  }
+
+  /* Map legend */
+  .map-legend {
+    background: #fff; border: 1px solid #ddd; border-radius: 10px;
+    padding: 10px 14px; font-size: 11px; line-height: 2; max-width: 180px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .map-legend h4 { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
+  .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
+
+  /* Loading */
+  .loading { position: fixed; inset: 0; background: #f9f9f9; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 10px; transition: opacity 0.3s; }
+  .loading.hidden { opacity: 0; pointer-events: none; }
+  .loading p { font-size: 14px; color: #888; }
+  .spinner { width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #3a8a3a; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 700px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
+    .map-wrap { height: 380px; }
+    .farm-list { height: 300px; }
+    .animal-filters { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 0.75rem; }
+  }
+</style>
+</head>
+<body>
+
+<div class="loading" id="loading">
+  <div style="font-size:32px">🐄</div>
+  <div class="spinner"></div>
+  <p>Loading farms...</p>
+</div>
+
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants">🍽️ Restaurants</a>
+  <a href="/parks">🌳 Parks</a>
+  <a href="/farms">🐄 Farms</a>
+</nav>
+
+<div class="page-header">
+  <h1>🐄 Farm Finder</h1>
+  <p>Animal farms, petting zoos and farm encounters in Greater Vancouver</p>
+</div>
+
+<div class="filters-bar">
+  <input type="text" id="searchInput" placeholder="🔍 Search farm name or city..." oninput="applyFilters()">
+  <select id="cityFilter" onchange="applyFilters()"><option value="">All cities</option></select>
+  <select id="entryFilter" onchange="applyFilters()">
+    <option value="">All admission</option>
+    <option value="Free">🆓 Free</option>
+    <option value="Donation">🎁 Donation</option>
+    <option value="Paid">🎟️ Paid</option>
+  </select>
+  <select id="seasonFilter" onchange="applyFilters()">
+    <option value="">All seasons</option>
+    <option value="Year-round">Year-round</option>
+    <option value="Seasonal">Seasonal</option>
+  </select>
+</div>
+
+<div class="animal-filters">
+  <span class="animal-chip-label">Animals:</span>
+  <button class="animal-chip" data-animal="horses" onclick="toggleAnimal(this)">🐴 Horses</button>
+  <button class="animal-chip" data-animal="goats" onclick="toggleAnimal(this)">🐐 Goats</button>
+  <button class="animal-chip" data-animal="cows" onclick="toggleAnimal(this)">🐄 Cows</button>
+  <button class="animal-chip" data-animal="sheep" onclick="toggleAnimal(this)">🐑 Sheep</button>
+  <button class="animal-chip" data-animal="pigs" onclick="toggleAnimal(this)">🐷 Pigs</button>
+  <button class="animal-chip" data-animal="chickens" onclick="toggleAnimal(this)">🐔 Chickens</button>
+  <button class="animal-chip" data-animal="ducks" onclick="toggleAnimal(this)">🦆 Ducks</button>
+  <button class="animal-chip" data-animal="rabbits" onclick="toggleAnimal(this)">🐇 Rabbits</button>
+  <button class="animal-chip" data-animal="donkeys" onclick="toggleAnimal(this)">🫏 Donkeys</button>
+  <button class="animal-chip" data-animal="emus" onclick="toggleAnimal(this)">🦤 Emus</button>
+  <button class="animal-chip" data-animal="alpacas" onclick="toggleAnimal(this)">🦙 Alpacas</button>
+  <button class="animal-chip" data-animal="bees" onclick="toggleAnimal(this)">🐝 Bees</button>
+</div>
+
+<div class="stats-row">
+  <span>Showing</span>
+  <span class="stat-pill" id="statShowing">—</span>
+  <span>of</span>
+  <span class="stat-pill" id="statTotal">—</span>
+  <span>farms</span>
+  <span>·</span>
+  <span class="stat-pill stat-pill-green" id="statFree">—</span>
+  <span>free/donation</span>
+  <span>·</span>
+  <span class="stat-pill stat-pill-orange" id="statAnimals">—</span>
+  <span>unique animal types</span>
+</div>
+
+<div class="main">
+  <div class="farm-list" id="farmList"></div>
+  <div class="map-wrap">
+    <div id="map"></div>
+    <div class="detail-card" id="detailCard">
+      <button class="detail-close" onclick="closeDetail()">×</button>
+      <div class="detail-name" id="dName"></div>
+      <div class="detail-city" id="dCity"></div>
+      <div class="detail-tags" id="dTags"></div>
+
+      <div class="detail-section-title">Animals</div>
+      <div class="animals-grid" id="dAnimals"></div>
+
+      <div class="detail-section-title">Info</div>
+      <div class="detail-row"><span class="lbl">Address</span><span id="dAddr"></span></div>
+      <div class="detail-row"><span class="lbl">Hours</span><span id="dHours"></span></div>
+      <div class="detail-row"><span class="lbl">Admission</span><span id="dAdmission"></span></div>
+      <div class="detail-row" id="dPhoneRow"><span class="lbl">Phone</span><a id="dPhone" href="#"></a></div>
+      <div class="detail-row" id="dWebRow"><span class="lbl">Website</span><a id="dWeb" href="#" target="_blank" rel="noopener"></a></div>
+
+      <div class="detail-section-title">Activities</div>
+      <div id="dActivities" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+
+      <div class="detail-section-title">Notes</div>
+      <div id="dNotes" style="font-size:12px;color:#555;line-height:1.6"></div>
+
+      <div style="margin-top:12px">
+        <a id="dDirections" href="#" target="_blank" rel="noopener"
+           style="display:inline-block;padding:7px 14px;background:#4a90e2;color:#fff;border-radius:8px;font-size:12px;text-decoration:none;font-weight:500">
+          🗺️ Get directions
+        </a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ── Farm data ── */
+const FARMS = [
+  {
+    id: 1,
+    name: "Southlands Heritage Farm",
+    city: "Vancouver",
+    address: "6767 Balaclava St (entrance at 3208 W 51st Ave), Vancouver, BC V6N 4K2",
+    lat: 49.2283, lon: -123.1712,
+    hours: "Mon–Fri 4pm–dusk · Sat–Sun 9am–5pm",
+    admission: "Donation",
+    phone: "(604) 261-1295",
+    website: "southlandsfarm.ca",
+    animals: ["horses", "ponies", "goats", "sheep", "chickens", "ducks", "pigs", "donkeys", "bees", "owls"],
+    animalEmojis: { horses:"🐴", ponies:"🐴", goats:"🐐", sheep:"🐑", chickens:"🐔", ducks:"🦆", pigs:"🐷", donkeys:"🫏", bees:"🐝", owls:"🦉" },
+    activities: ["Pony rides", "Farm tours", "Birthday parties", "Summer camps", "Riding lessons"],
+    season: "Year-round",
+    notes: "Hidden gem in Vancouver's Kerrisdale neighbourhood. Drop-in visits welcome. Pony rides $15. Call ahead recommended.",
+  },
+  {
+    id: 2,
+    name: "Stanley Park Children's Farmyard",
+    city: "Vancouver",
+    address: "Stanley Park, Vancouver, BC",
+    lat: 49.3011, lon: -123.1436,
+    hours: "Seasonal — check website for current hours",
+    admission: "Paid",
+    phone: null,
+    website: "vancouver.ca/parks-recreation-culture/stanley-park.aspx",
+    animals: ["goats", "sheep", "rabbits", "chickens"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", rabbits:"🐇", chickens:"🐔" },
+    activities: ["Petting animals", "Educational talks", "Farm demonstrations"],
+    season: "Seasonal",
+    notes: "Located inside Stanley Park near the miniature railway. Great for young children.",
+  },
+  {
+    id: 3,
+    name: "Vancouver Aquarium",
+    city: "Vancouver",
+    address: "845 Avison Way, Vancouver, BC V6G 3E2",
+    lat: 49.3006, lon: -123.1306,
+    hours: "Daily 10am–5pm",
+    admission: "Paid",
+    phone: "(604) 659-3400",
+    website: "vanaqua.org",
+    animals: ["sea otters", "dolphins", "sea lions", "jellyfish", "sharks", "turtles", "fish"],
+    animalEmojis: { "sea otters":"🦦", dolphins:"🐬", "sea lions":"🦭", jellyfish:"🪼", sharks:"🦈", turtles:"🐢", fish:"🐠" },
+    activities: ["Feeding shows", "Behind-the-scenes tours", "Diving presentations"],
+    season: "Year-round",
+    notes: "Canada's largest aquarium with 65,000 animals. Located in Stanley Park.",
+  },
+  {
+    id: 4,
+    name: "UU Family Farm",
+    city: "Richmond",
+    address: "9660 Sidaway Rd, Richmond, BC V6W 1C2",
+    lat: 49.1412, lon: -123.1539,
+    hours: "Mon & Fri 10am–7pm · Wed–Sun 10am–7pm (Tue–Wed closed for animal vacation)",
+    admission: "Paid",
+    phone: "778-888-7777",
+    website: "uufamilyfarm.com",
+    animals: ["goats", "sheep", "chickens", "ducks", "rabbits", "emus", "ostriches", "ponies", "swans", "cranes"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", chickens:"🐔", ducks:"🦆", rabbits:"🐇", emus:"🦤", ostriches:"🦤", ponies:"🐴", swans:"🦢", cranes:"🦩" },
+    activities: ["Feeding animals", "Face painting (weekends)", "Photo opportunities", "Picnic area", "Events"],
+    season: "Year-round",
+    notes: "300+ animals. One of the most diverse animal farms in Greater Vancouver. Tickets required — book online.",
+  },
+  {
+    id: 5,
+    name: "Maplewood Farm",
+    city: "North Vancouver",
+    address: "405 Seymour River Place, North Vancouver, BC V7H 1S6",
+    lat: 49.3195, lon: -122.9947,
+    hours: "Daily 10am–4pm (closed Mondays Nov–Mar)",
+    admission: "Paid",
+    phone: "(604) 929-5610",
+    website: "maplewoodfarm.bc.ca",
+    animals: ["cows", "horses", "pigs", "goats", "sheep", "donkeys", "rabbits", "chickens", "ducks", "geese"],
+    animalEmojis: { cows:"🐄", horses:"🐴", pigs:"🐷", goats:"🐐", sheep:"🐑", donkeys:"🫏", rabbits:"🐇", chickens:"🐔", ducks:"🦆", geese:"🪿" },
+    activities: ["Milking demos (1:15pm daily)", "Pig/horse feeding (11:30am)", "Tractor rides", "Farm camp", "School programs"],
+    season: "Year-round",
+    notes: "200+ animals. The North Shore's last remaining farm. Miniature donkey named Rosie is a favourite!",
+  },
+  {
+    id: 6,
+    name: "Queen's Park Petting Farm",
+    city: "New Westminster",
+    address: "Queen's Park, New Westminster, BC",
+    lat: 49.2167, lon: -122.9081,
+    hours: "Opens May 23 · Seasonal hours",
+    admission: "Donation",
+    phone: null,
+    website: "newwestcity.ca",
+    animals: ["goats", "sheep", "chickens", "ducks", "rabbits"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", chickens:"🐔", ducks:"🦆", rabbits:"🐇" },
+    activities: ["Animal petting", "Playground nearby", "Bandshell performances (summer Sundays)"],
+    season: "Seasonal",
+    notes: "Located in Queen's Park alongside a playground and water park. Admission by donation.",
+  },
+  {
+    id: 7,
+    name: "London Heritage Farm",
+    city: "Richmond",
+    address: "23277 Steveston Hwy, Richmond, BC V6V 1A7",
+    lat: 49.1144, lon: -123.1514,
+    hours: "Check website for seasonal hours",
+    admission: "Free",
+    phone: null,
+    website: "londonfarm.ca",
+    animals: ["chickens", "bees"],
+    animalEmojis: { chickens:"🐔", bees:"🐝" },
+    activities: ["Tea room", "Heritage farm tours", "Gift shop", "Community gardens"],
+    season: "Seasonal",
+    notes: "Historic 1880s farmhouse overlooking the Fraser River. Small number of animals but a lovely heritage experience.",
+  },
+  {
+    id: 8,
+    name: "Aldor Acres Family Farm",
+    city: "Langley",
+    address: "24185 60 Ave, Langley, BC V2Z 2K9",
+    lat: 49.0873, lon: -122.5498,
+    hours: "Year-round — check website for seasonal hours",
+    admission: "Paid",
+    phone: null,
+    website: "aldoracres.com",
+    animals: ["goats", "sheep", "pigs", "chickens", "ducks", "rabbits", "horses"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", pigs:"🐷", chickens:"🐔", ducks:"🦆", rabbits:"🐇", horses:"🐴" },
+    activities: ["Petting zoo", "Pony rides", "Hayrides", "Pumpkin patch (fall)", "Christmas trees (winter)", "School tours", "Birthday parties"],
+    season: "Year-round",
+    notes: "Operating since 1988. A classic family farm with seasonal events. Harvest Festival in fall.",
+  },
+  {
+    id: 9,
+    name: "Krause Berry Farms",
+    city: "Langley",
+    address: "6179 248 St, Langley, BC V4W 2A8",
+    lat: 49.1023, lon: -122.5283,
+    hours: "Seasonal — open spring through fall",
+    admission: "Paid",
+    phone: null,
+    website: "krauseberryfarms.com",
+    animals: ["cows", "pigs", "sheep", "horses", "goats", "rabbits", "chickens", "ducks"],
+    animalEmojis: { cows:"🐄", pigs:"🐷", sheep:"🐑", horses:"🐴", goats:"🐐", rabbits:"🐇", chickens:"🐔", ducks:"🦆" },
+    activities: ["U-pick berries", "Animal farm", "Winery", "Waffles & food", "Seasonal events"],
+    season: "Seasonal",
+    notes: "200-acre berry farm with 200+ animals. Estate winery open year-round.",
+  },
+  {
+    id: 10,
+    name: "Maan Farms",
+    city: "Abbotsford",
+    address: "790 McKenzie Rd, Abbotsford, BC V2S 6B8",
+    lat: 49.0526, lon: -122.2647,
+    hours: "Year-round — hours vary by season",
+    admission: "Paid",
+    phone: null,
+    website: "maanfarms.com",
+    animals: ["goats", "sheep", "pigs", "chickens", "ducks", "rabbits"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", pigs:"🐷", chickens:"🐔", ducks:"🦆", rabbits:"🐇" },
+    activities: ["Petting zoo", "Zipline", "Corn maze", "Goat yoga", "Barnyard Adventureland", "Berry picking"],
+    season: "Year-round",
+    notes: "One of the most activity-packed farms in the Lower Mainland. Goat yoga is a unique highlight!",
+  },
+  {
+    id: 11,
+    name: "Taves Family Farms",
+    city: "Abbotsford",
+    address: "333 Gladwin Rd, Abbotsford, BC V2S 7V2",
+    lat: 49.0571, lon: -122.2784,
+    hours: "Seasonal — spring and fall",
+    admission: "Paid",
+    phone: null,
+    website: "tavesfamilyfarms.com",
+    animals: ["rabbits", "chickens", "goats", "sheep"],
+    animalEmojis: { rabbits:"🐇", chickens:"🐔", goats:"🐐", sheep:"🐑" },
+    activities: ["Petting barn", "U-pick apples", "Corn maze", "Pumpkin patch", "Easter events"],
+    season: "Seasonal",
+    notes: "Especially popular in spring (Easter) and fall (pumpkin season).",
+  },
+  {
+    id: 12,
+    name: "Eagle Acres Dairy & Pumpkin Patch",
+    city: "Fort Langley",
+    address: "8338 216 St, Langley, BC V1M 2S5",
+    lat: 49.1663, lon: -122.5661,
+    hours: "Seasonal — spring and fall",
+    admission: "Paid",
+    phone: null,
+    website: null,
+    animals: ["cows", "chickens", "pigs", "goats"],
+    animalEmojis: { cows:"🐄", chickens:"🐔", pigs:"🐷", goats:"🐐" },
+    activities: ["Dairy farm visits", "Pumpkin picking", "Animal viewing"],
+    season: "Seasonal",
+    notes: "Working dairy farm with 200+ animals. Great for seeing real farm operations.",
+  },
+  {
+    id: 13,
+    name: "Grouse Mountain Wildlife Refuge",
+    city: "North Vancouver",
+    address: "6400 Nancy Greene Way, North Vancouver, BC V7R 4K9",
+    lat: 49.3724, lon: -123.0832,
+    hours: "Daily — gondola required (check website)",
+    admission: "Paid",
+    phone: "(604) 984-0661",
+    website: "grousemountain.com/wildlife-refuge",
+    animals: ["grizzly bears", "owls", "eagles", "wolves"],
+    animalEmojis: { "grizzly bears":"🐻", owls:"🦉", eagles:"🦅", wolves:"🐺" },
+    activities: ["Wildlife viewing", "Interpretive talks", "Gondola ride", "Skiing (winter)", "Zipline"],
+    season: "Year-round",
+    notes: "Grinder and Coola — two resident grizzly bears — are the stars. Gondola ticket required for access.",
+  },
+  {
+    id: 14,
+    name: "Greater Vancouver Zoo",
+    city: "Langley",
+    address: "5048 264 St, Aldergrove, BC V4W 1N7",
+    lat: 49.0726, lon: -122.4721,
+    hours: "Daily 9am–5pm (summer until 7pm)",
+    admission: "Paid",
+    phone: "(604) 856-6825",
+    website: "gvzoo.com",
+    animals: ["giraffes", "lions", "tigers", "hippos", "zebras", "camels", "bison", "wolves", "bears", "elephants"],
+    animalEmojis: { giraffes:"🦒", lions:"🦁", tigers:"🐯", hippos:"🦛", zebras:"🦓", camels:"🐪", bison:"🦬", wolves:"🐺", bears:"🐻", elephants:"🐘" },
+    activities: ["Safari tram", "Keeper talks", "School programs", "Behind-the-scenes tours"],
+    season: "Year-round",
+    notes: "49 hectares with 60+ species. The largest zoo in BC. Not a petting zoo — viewing only for most animals.",
+  },
+  {
+    id: 15,
+    name: "Country Vines Winery & Petting Zoo",
+    city: "Richmond",
+    address: "18580 No. 10 Rd, Richmond, BC V6V 1L3",
+    lat: 49.1262, lon: -122.9789,
+    hours: "Seasonal — check website",
+    admission: "Paid",
+    phone: null,
+    website: "countryvines.ca",
+    animals: ["goats", "sheep", "rabbits", "chickens"],
+    animalEmojis: { goats:"🐐", sheep:"🐑", rabbits:"🐇", chickens:"🐔" },
+    activities: ["Petting zoo", "Wine tasting (adults)", "Berry picking"],
+    season: "Seasonal",
+    notes: "Unexpected combo of winery and petting zoo. Great for parents who want a drink while kids meet animals!",
+  },
+  {
+    id: 16,
+    name: "Little Campbell Hatchery",
+    city: "Surrey",
+    address: "3711 184 St, Surrey, BC V3Z 1B5",
+    lat: 49.0203, lon: -122.7283,
+    hours: "Seasonal — check website",
+    admission: "Free",
+    phone: null,
+    website: "dfo-mpo.gc.ca",
+    animals: ["salmon", "trout", "fish"],
+    animalEmojis: { salmon:"🐟", trout:"🐟", fish:"🐠" },
+    activities: ["Fish viewing", "Salmon release", "Educational programs"],
+    season: "Seasonal",
+    notes: "Federal salmon hatchery open to the public. Peaceful nature area — great for learning about aquatic life.",
+  },
+];
+
+/* ── Animal emoji map for display ── */
+const ANIMAL_EMOJIS = {
+  horses:"🐴", ponies:"🐴", goats:"🐐", cows:"🐄", sheep:"🐑",
+  pigs:"🐷", chickens:"🐔", ducks:"🦆", rabbits:"🐇", donkeys:"🫏",
+  emus:"🦤", ostriches:"🦤", alpacas:"🦙", bees:"🐝", owls:"🦉",
+  eagles:"🦅", "grizzly bears":"🐻", wolves:"🐺", "sea otters":"🦦",
+  dolphins:"🐬", "sea lions":"🦭", jellyfish:"🪼", sharks:"🦈",
+  turtles:"🐢", fish:"🐠", salmon:"🐟", giraffes:"🦒", lions:"🦁",
+  tigers:"🐯", hippos:"🦛", zebras:"🦓", camels:"🐪", bison:"🦬",
+  elephants:"🐘", swans:"🦢", cranes:"🦩", geese:"🪿",
+};
+
+/* ── Entry colours ── */
+const ENTRY_CSS = { "Free": "entry-free", "Donation": "entry-donation", "Paid": "entry-paid" };
+const ENTRY_EMOJI = { "Free": "🆓", "Donation": "🎁", "Paid": "🎟️" };
+
+/* ── Map marker colours ── */
+const ENTRY_COLORS = { "Free": "#2a6a2a", "Donation": "#b7770d", "Paid": "#2471a3" };
+
+function makeIcon(entry) {
+  const color = ENTRY_COLORS[entry] || "#555";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22s14-12.667 14-22C28 6.268 21.732 0 14 0z" fill="${color}"/>
+    <circle cx="14" cy="14" r="6" fill="white"/>
+    <text x="14" y="18" font-size="8" text-anchor="middle">🐄</text>
+  </svg>`;
+  return L.icon({ iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`, iconSize:[28,36], iconAnchor:[14,36], popupAnchor:[0,-36] });
+}
+
+/* ── State ── */
+let map, filtered = [...FARMS], markers = [], activeIdx = null;
+let selectedAnimals = new Set();
+
+/* ── Map ── */
+function initMap() {
+  map = L.map("map").setView([49.2, -122.9], 10);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>', maxZoom: 19,
+  }).addTo(map);
+
+  const legend = L.control({ position: "bottomright" });
+  legend.onAdd = () => {
+    const d = document.createElement("div");
+    d.className = "map-legend";
+    d.innerHTML = `<h4>Admission</h4>
+      <div><span class="dot" style="background:#2a6a2a"></span>Free</div>
+      <div><span class="dot" style="background:#b7770d"></span>Donation</div>
+      <div><span class="dot" style="background:#2471a3"></span>Paid</div>`;
+    return d;
+  };
+  legend.addTo(map);
+}
+
+function renderMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  filtered.forEach((farm, i) => {
+    const m = L.marker([farm.lat, farm.lon], { icon: makeIcon(farm.admission) });
+    m.on("click", () => selectFarm(i, true));
+    m.addTo(map);
+    markers.push(m);
+  });
+}
+
+/* ── List ── */
+function renderList() {
+  const el = document.getElementById("farmList");
+  if (!filtered.length) {
+    el.innerHTML = `<div class="no-results">No farms match your filters.</div>`;
+    return;
+  }
+  el.innerHTML = filtered.map((farm, i) => {
+    const animalTags = farm.animals.slice(0, 6).map(a =>
+      `<span class="animal-tag">${ANIMAL_EMOJIS[a] || "🐾"} ${a}</span>`
+    ).join("");
+    const more = farm.animals.length > 6 ? `<span class="animal-tag">+${farm.animals.length - 6} more</span>` : "";
+    return `<div class="farm-item" id="fi${i}" onclick="selectFarm(${i}, false)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div class="farm-name">${farm.name}</div>
+        <span class="entry-tag ${ENTRY_CSS[farm.admission]}">${ENTRY_EMOJI[farm.admission]} ${farm.admission}</span>
+      </div>
+      <div class="farm-city">📍 ${farm.city} · ${farm.season}</div>
+      <div class="farm-animals">${animalTags}${more}</div>
+    </div>`;
+  }).join("") + `<div class="list-footer">${filtered.length} farm${filtered.length===1?"":"s"}</div>`;
+}
+
+/* ── Select ── */
+function selectFarm(idx, fromMap) {
+  const farm = filtered[idx];
+  if (!farm) return;
+
+  if (activeIdx !== null) {
+    document.getElementById(`fi${activeIdx}`)?.classList.remove("active");
+  }
+  activeIdx = idx;
+  document.getElementById(`fi${idx}`)?.classList.add("active");
+  document.getElementById(`fi${idx}`)?.scrollIntoView({ block: "nearest" });
+
+  if (!fromMap) map.setView([farm.lat, farm.lon], 14, { animate: true });
+
+  document.getElementById("dName").textContent = farm.name;
+  document.getElementById("dCity").textContent = `📍 ${farm.city}`;
+
+  document.getElementById("dTags").innerHTML =
+    `<span class="entry-tag ${ENTRY_CSS[farm.admission]}">${ENTRY_EMOJI[farm.admission]} ${farm.admission}</span>` +
+    `<span class="entry-tag" style="background:#f0f0f0;color:#555">${farm.season}</span>`;
+
+  document.getElementById("dAnimals").innerHTML = farm.animals.map(a =>
+    `<span class="animal-pill">${ANIMAL_EMOJIS[a] || "🐾"} ${a}</span>`
+  ).join("");
+
+  document.getElementById("dAddr").textContent     = farm.address;
+  document.getElementById("dHours").textContent    = farm.hours;
+  document.getElementById("dAdmission").textContent = farm.admission;
+
+  const phoneRow = document.getElementById("dPhoneRow");
+  if (farm.phone) {
+    document.getElementById("dPhone").href = `tel:${farm.phone}`;
+    document.getElementById("dPhone").textContent = farm.phone;
+    phoneRow.style.display = "flex";
+  } else { phoneRow.style.display = "none"; }
+
+  const webRow = document.getElementById("dWebRow");
+  if (farm.website) {
+    const url = farm.website.startsWith("http") ? farm.website : `https://${farm.website}`;
+    document.getElementById("dWeb").href = url;
+    document.getElementById("dWeb").textContent = farm.website;
+    webRow.style.display = "flex";
+  } else { webRow.style.display = "none"; }
+
+  document.getElementById("dActivities").innerHTML = (farm.activities || []).map(a =>
+    `<span class="animal-tag" style="background:#fff3e0;color:#7a4f00">${a}</span>`
+  ).join("");
+
+  document.getElementById("dNotes").textContent = farm.notes || "";
+
+  document.getElementById("dDirections").href =
+    `https://www.google.com/maps/dir/?api=1&destination=${farm.lat},${farm.lon}`;
+
+  document.getElementById("detailCard").classList.add("visible");
+}
+
+function closeDetail() {
+  document.getElementById("detailCard").classList.remove("visible");
+  document.getElementById(`fi${activeIdx}`)?.classList.remove("active");
+  activeIdx = null;
+}
+
+/* ── Animal filter ── */
+function toggleAnimal(btn) {
+  const animal = btn.dataset.animal;
+  if (selectedAnimals.has(animal)) {
+    selectedAnimals.delete(animal);
+    btn.classList.remove("active");
+  } else {
+    selectedAnimals.add(animal);
+    btn.classList.add("active");
+  }
+  applyFilters();
+}
+
+/* ── Filters ── */
+function applyFilters() {
+  const q      = document.getElementById("searchInput").value.toLowerCase();
+  const city   = document.getElementById("cityFilter").value;
+  const entry  = document.getElementById("entryFilter").value;
+  const season = document.getElementById("seasonFilter").value;
+
+  filtered = FARMS.filter(f => {
+    if (q && !f.name.toLowerCase().includes(q) && !f.city.toLowerCase().includes(q)) return false;
+    if (city && f.city !== city) return false;
+    if (entry && f.admission !== entry) return false;
+    if (season && f.season !== season) return false;
+    if (selectedAnimals.size > 0) {
+      const farmAnimals = new Set(f.animals);
+      for (const a of selectedAnimals) {
+        if (!farmAnimals.has(a)) return false;
+      }
+    }
+    return true;
+  });
+
+  activeIdx = null;
+  closeDetail();
+  renderMarkers();
+  renderList();
+  updateStats();
+
+  const pts = filtered.map(f => [f.lat, f.lon]);
+  if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 13, animate: true });
+}
+
+function updateStats() {
+  const freeCount = filtered.filter(f => f.admission === "Free" || f.admission === "Donation").length;
+  const allAnimals = new Set(filtered.flatMap(f => f.animals));
+  document.getElementById("statShowing").textContent = filtered.length;
+  document.getElementById("statTotal").textContent   = FARMS.length;
+  document.getElementById("statFree").textContent    = freeCount;
+  document.getElementById("statAnimals").textContent = allAnimals.size;
+}
+
+function populateFilters() {
+  const cities = [...new Set(FARMS.map(f => f.city))].sort();
+  const sel = document.getElementById("cityFilter");
+  cities.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+}
+
+/* ── Boot ── */
+function init() {
+  initMap();
+  populateFilters();
+  renderMarkers();
+  renderList();
+  updateStats();
+  map.fitBounds(FARMS.map(f => [f.lat, f.lon]), { padding: [40, 40], maxZoom: 11 });
+  const ov = document.getElementById("loading");
+  ov.classList.add("hidden");
+  setTimeout(() => ov.remove(), 300);
+}
+
+init();
+</script>
+</body>
+</html>

@@ -8,15 +8,27 @@
     <style>
         body { font-family: Arial; background: #f5f5f7; margin: 0; }
 
-        .nav {
-            display: flex; gap: 20px; padding: 15px; background: white;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.08); justify-content: center;
+        
+        nav {
+            background: #fff;
+            border-bottom: 1px solid #e0e0e0;
+            padding: 0.6rem 1.2rem;
+            display: flex;
+            gap: 1.2rem;
+            flex-wrap: wrap;
+            align-items: center;
+                }
+
+        nav a {
+            color: #4a90e2;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
         }
-        .nav a {
-            text-decoration: none; color: #333; font-weight: bold;
-            padding: 6px 10px; border-radius: 8px; transition: 0.2s;
-        }
-        .nav a:hover { background: #f0f0f0; }
+
+        nav a:hover { text-decoration: underline; }
+        nav a.active { color: #333; font-weight: 600; }
 
         h1 { text-align: center; padding: 20px; margin: 0; }
         h2 { text-align: center; margin-top: 10px; }
@@ -100,13 +112,17 @@
 </head>
 <body>
 
-<div class="nav">
-    <a href="/">📚 Books</a>
-    <a href="/bookdeals">🔥 Deals</a>
-    <a href="/trending">📈 Trending Books</a>
-    <a href="/availability-page">📊 Charts</a>
-    <a href="/schedule">📅 Schedule</a>
-</div>
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants">🍽️ Restaurants</a>
+  <a href="/parks">🌳 Parks</a>
+  <a href="/farms">🐄 Farms</a>
+</nav>
 
 <h1>📚 My Bookshelf</h1>
 
