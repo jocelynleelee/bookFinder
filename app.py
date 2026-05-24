@@ -1,3 +1,8 @@
+import json
+import feedparser
+import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from collections import Counter
 from contextlib import contextmanager
 
@@ -22,6 +27,39 @@ register_vch_routes(app)
 register_translink_routes(app)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine)
+
+VANCOUVER_COMMUNITY_CENTRES = {
+    "hillcrest community centre": (49.2432, -123.1076),
+    "trout lake community centre": (49.2540, -123.0650),
+    "kerrisdale community centre": (49.2345, -123.1554),
+    "roundhouse community arts & recreation centre": (49.2734, -123.1217),
+    "douglas park community centre": (49.2497, -123.1207),
+    "britannia community centre": (49.2775, -123.0715),
+    "killarney community centre": (49.2205, -123.0388),
+    "kitsilano community centre": (49.2680, -123.1686),
+    "dunbar community centre": (49.2496, -123.1857),
+    "sunset community centre": (49.2251, -123.0905),
+    "creekside community recreation centre": (49.2710, -123.1048),
+    "false creek community centre": (49.2694, -123.1151),
+    "coal harbour community centre": (49.2920, -123.1297),
+    "west end community centre": (49.2829, -123.1335),
+    "mount pleasant community centre": (49.2626, -123.1000),
+    "marpole-oakridge community centre": (49.2108, -123.1286),
+    "oakridge centre community centre": (49.2334, -123.1162),
+    "renfrew park community centre": (49.2455, -123.0434),
+    "thunderbird community centre": (49.2732, -123.0550),
+    "champlain heights community centre": (49.2156, -123.0315),
+    "raycam community centre": (49.2803, -123.0873),
+    "strathcona community centre": (49.2785, -123.0901),
+    "hastings community centre": (49.2817, -123.0389),
+    "japanese hall community centre": (49.2808, -123.0482),
+    "gathering place community centre": (49.2789, -123.1280),
+    "evelyne saller centre": (49.2815, -123.1030),
+    "west point grey community centre": (49.2687, -123.2098),
+    "kensington community centre": (49.2384, -123.0742),
+    "cedar cottage neighbourhood house": (49.2492, -123.0737),
+    "collingwood neighbourhood house": (49.2362, -123.0518),
+}
 
 
 @contextmanager
@@ -551,13 +589,128 @@ def admin_ingest_outlet():
     run_ingest()
     return jsonify({"status": "Ingestion started"}), 200
 
-# @app.route("/childcare-map")
-# def childcare_map():
-#     return render_template("childcare-map.html")
+@app.route("/kid-events")
+def kid_events_page():
+    return render_template("kid_events.html")
 
-# @app.route("/restaurants")
-# def restaurants():
-#     return render_template("restaurant-map.html")
+@app.route("/api/kid-events")
+def api_kid_events():
+    events = []
+
+    # -------------------------------------------------
+    # Vancouver Public Library RSS
+    # -------------------------------------------------
+
+    rss_url = (
+        "https://gateway.bibliocommons.com/v2/libraries/vpl/rss/events?audiences=53c940484246f6147c00000f%2C53c940484246f6147c00000d"
+    )
+
+    feed = feedparser.parse(rss_url)
+
+    for entry in feed.entries:
+        location = getattr(entry, "bc_name", None)
+
+        if not getattr(entry, "bc_latitude", None) or \
+            not getattr(entry, "bc_longitude", None):
+            continue
+        start_time = getattr(entry, "bc_start_date", "")
+        end_time = getattr(entry, "bc_end_date", "")
+
+        utc_start_time = datetime.fromisoformat(start_time)
+        vancouver_start_time = utc_start_time.astimezone(
+            ZoneInfo("America/Vancouver")
+        )
+        utc_end_time = datetime.fromisoformat(end_time)
+        vancouver_end_time = utc_end_time.astimezone(
+            ZoneInfo("America/Vancouver")
+        )
+        events.append({
+            "title": entry.title,
+            "location": location,
+            "lat": entry.bc_latitude,
+            "lon": entry.bc_longitude,
+            "start": vancouver_start_time,
+            "end": vancouver_end_time,
+            "summary": entry.get("summary", ""),
+            "url": entry.link,
+            "source": "library"
+        })
+
+    # -------------------------------------------------
+    # Vancouver Community Centres
+    # -------------------------------------------------
+
+    url = "https://anc.ca.apm.activecommunities.com/vancouver/rest/activities/list"
+
+    def fetch_page(page_number):
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "Origin": "https://anc.ca.apm.activecommunities.com",
+            "Referer": "https://anc.ca.apm.activecommunities.com/vancouver/activity/search",
+            "Page_info": json.dumps({
+                "order_by": "Name",
+                "page_number": page_number,
+                "total_records_per_page": 20
+            })
+        }
+
+        payload = {
+            "activity_search_pattern": {
+                "activity_keyword": "",
+                "activity_select_param": 2,
+                "center_ids": [],
+                "activity_category_ids": []
+            },
+            "activity_transfer_pattern": {}
+        }
+
+        r = requests.post(url, headers=headers, json=payload)
+
+        if r.status_code != 200:
+            return None
+
+        return r.json()
+
+    all_events = []
+
+    for page in range(1, 10):
+        data = fetch_page(page)
+
+        if not data:
+            break
+
+        activities = data.get("body", {}).get("activity_items", [])
+
+        if not activities:
+            break
+
+        all_events.extend(activities)
+
+    for activity in all_events:
+        location = activity.get("location", {}).get("label", "").strip("*").lower().replace("cmty", "community")
+
+        coords = VANCOUVER_COMMUNITY_CENTRES.get(location)
+
+        if not coords:
+            continue
+        start, end = activity.get("time_range").split("-")[0].strip(), activity.get("time_range").split("-")[1]
+        
+        events.append({
+            "title": activity.get("name"),
+            "location": activity.get("location", {}).get("label"),
+            "lat": coords[0],
+            "lon": coords[1],
+            "start": start,
+            "end": end,
+            "summary": activity.get("desc", ""),
+            "url": activity.get("detail_url", ""),
+            "age": activity.get("age_description"),
+            "source": "community"
+        })
+
+    return jsonify(events)
 
 @app.route("/parks")
 def parks():

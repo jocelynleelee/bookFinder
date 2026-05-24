@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Vancouver Kid Events</title>
+
+    <link
+        rel="stylesheet"
+        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f5f5f5;
+        }
+
+        header {
+            padding: 16px;
+            background: #4a90e2;
+            color: white;
+            font-size: 24px;
+            font-weight: bold;
+        }
+
+        #layout {
+            display: flex;
+            height: calc(100vh - 64px);
+        }
+
+        #map {
+            flex: 1;
+        }
+
+        #sidebar {
+            width: 420px;
+            overflow-y: auto;
+            background: white;
+            border-left: 1px solid #ddd;
+            padding: 16px;
+        }
+
+        .event-card {
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 12px;
+            margin-bottom: 12px;
+            background: white;
+        }
+
+        .event-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 6px;
+        }
+
+        .event-location {
+            color: #555;
+            margin-bottom: 6px;
+        }
+
+        .event-source {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+            margin-bottom: 10px;
+        }
+
+        .library {
+            background: #dff0ff;
+            color: #0066aa;
+        }
+
+        .community {
+            background: #e8ffe8;
+            color: #228822;
+        }
+
+        .event-link {
+            display: inline-block;
+            margin-top: 10px;
+            text-decoration: none;
+            color: #4a90e2;
+            font-weight: bold;
+        }
+
+        #filters {
+            margin-bottom: 16px;
+        }
+
+        button {
+            padding: 8px 12px;
+            margin-right: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            background: #4a90e2;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    Vancouver Kid Events
+</header>
+
+<div id="layout">
+    <div id="map"></div>
+
+    <div id="sidebar">
+        <div id="filters">
+            <button onclick="filterEvents('all')">All</button>
+            <button onclick="filterEvents('library')">Libraries</button>
+            <button onclick="filterEvents('community')">Community Centres</button>
+        </div>
+
+        <div id="events"></div>
+    </div>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+    const map = L.map('map').setView([49.25, -123.12], 11);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap contributors'
+    }).addTo(map);
+
+    let allEvents = [];
+    let markers = [];
+
+    async function loadEvents() {
+        const response = await fetch('/api/kid-events');
+        allEvents = await response.json();
+
+        renderEvents(allEvents);
+        renderMarkers(allEvents);
+    }
+
+    function clearMarkers() {
+        markers.forEach(marker => map.removeLayer(marker));
+        markers = [];
+    }
+
+    function renderMarkers(events) {
+        clearMarkers();
+
+        events.forEach(event => {
+            if (!event.lat || !event.lon) {
+                return;
+            }
+            const start_time = new Date(event.start).toLocaleString("en-CA", {
+            timeZone: "America/Vancouver",
+            
+            });
+            // const start_time = "TEST VANCOVER TIME";
+            const marker = L.marker([event.lat, event.lon])
+                .addTo(map)
+                .bindPopup(function () {
+  return `
+    <strong>${event.title}</strong><br>
+    ${event.location}<br>
+    ${new Date(start_time).toLocaleString("en-CA", {
+      timeZone: "America/Vancouver"
+    })}
+  `;
+});
+
+            markers.push(marker);
+        });
+    }
+
+    function renderEvents(events) {
+        const container = document.getElementById('events');
+
+        container.innerHTML = '';
+
+        events.forEach(event => {
+            const card = document.createElement('div');
+            card.className = 'event-card';
+            const start_time = new Date(event.start).toLocaleString("en-CA", {
+            timeZone: "America/Vancouver",
+            
+            });
+            card.innerHTML = `
+                <div class="event-title">${event.title}</div>
+
+                <div class="event-location">
+                    ${event.location || 'Unknown location'}
+                </div>
+
+                <div class="event-source ${event.source}">
+                    ${event.source}
+                </div>
+
+                <div>
+                    ${start_time || ''}
+                </div>
+
+                <div>
+                    ${event.summary || ''}
+                </div>
+
+                <a class="event-link" href="${event.url}" target="_blank">
+                    View Event
+                </a>
+            `;
+
+            container.appendChild(card);
+        });
+    }
+
+    function filterEvents(source) {
+        if (source === 'all') {
+            renderEvents(allEvents);
+            renderMarkers(allEvents);
+            return;
+        }
+
+        const filtered = allEvents.filter(e => e.source === source);
+
+        renderEvents(filtered);
+        renderMarkers(filtered);
+    }
+
+    loadEvents();
+</script>
+
+</body>
+</html>
