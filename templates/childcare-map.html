@@ -293,6 +293,29 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── Responsive ── */
+
+  /* Near me button */
+  .near-me-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .near-me-btn:hover  { border-color: #4a90e2; color: #4a90e2; }
+  .near-me-btn.active { background: #e8f0fb; border-color: #4a90e2; color: #4a90e2; font-weight: 500; }
+  .near-me-btn.loading { opacity: 0.6; cursor: wait; }
+  .dist-badge { font-size: 10px; color: #4a90e2; font-weight: 500; margin-left: 2px; }
+
   @media (max-width: 680px) {
     .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
     .map-wrap { height: 380px; }
@@ -310,6 +333,7 @@
 </div>
 
 <!-- ── Nav: copy your existing nav links here ── -->
+
 <nav>
   <a href="/">📚 Books</a>
   <a href="/bookdeals">🔥 Deals</a>
@@ -442,11 +466,20 @@ function renderList() {
     el.innerHTML = `<div class="no-results">No facilities match your filters.</div>`;
     return;
   }
-  el.innerHTML = filtered.slice(0, 300).map((f, i) => {
+  const displayList = (nearMeActive && userLat)
+    ? [...filtered].sort((a,b) => {
+        const dA = (a.latitude && a.longitude) ? haversine(userLat,userLon,a.latitude,a.longitude) : 999;
+        const dB = (b.latitude && b.longitude) ? haversine(userLat,userLon,b.latitude,b.longitude) : 999;
+        return dA - dB;
+      })
+    : filtered;
+  el.innerHTML = displayList.slice(0, 300).map((f, i) => {
     const c = typeColor(f.facilityType);
     const typeShort = (f.facilityType || "Unknown").replace(/ \(.*\)/, "");
+    const dist = (nearMeActive && userLat && f.latitude && f.longitude)
+      ? ` <span class="dist-badge">${distLabel(haversine(userLat,userLon,f.latitude,f.longitude))}</span>` : "";
     return `<div class="facility-item" id="li${i}" onclick="selectFacility(${i}, false)">
-      <div class="facility-name">${f.facilityName || "—"}</div>
+      <div class="facility-name">${f.facilityName || "—"}${dist}</div>
       <div class="facility-addr">${f.siteAddress || "—"}</div>
       <span class="type-tag" style="background:${c.bg};color:${c.text}">${typeShort}</span>
     </div>`;
@@ -674,6 +707,76 @@ async function init() {
   const ov = document.getElementById("loading");
   ov.classList.add("hidden");
   setTimeout(() => ov.remove(), 400);
+}
+
+
+/* ── Near me ─────────────────────────────────────────────────────────────── */
+let userLat = null, userLon = null, nearMeActive = false;
+let userMarker = null;
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function distLabel(km) {
+  return km < 1 ? `${Math.round(km*1000)}m` : `${km.toFixed(1)}km`;
+}
+
+function placeUserMarker(lat, lon) {
+  if (userMarker) map.removeLayer(userMarker);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="8" fill="#4a90e2" opacity="0.2"/>
+    <circle cx="10" cy="10" r="5" fill="#4a90e2"/>
+    <circle cx="10" cy="10" r="2" fill="white"/>
+  </svg>`;
+  userMarker = L.marker([lat, lon], {
+    icon: L.icon({ iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`, iconSize:[20,20], iconAnchor:[10,10] }),
+    zIndexOffset: 1000,
+  }).bindPopup("📍 You are here").addTo(map);
+}
+
+function toggleNearMe() {
+  const btn = document.getElementById("nearMeBtn");
+  if (!btn) return;
+
+  if (nearMeActive) {
+    nearMeActive = false; userLat = null; userLon = null;
+    btn.classList.remove("active");
+    btn.textContent = "📍 Near me";
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    applyFilters();
+    return;
+  }
+
+  if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+
+  btn.classList.add("loading");
+  btn.textContent = "📍 Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      nearMeActive = true;
+      btn.classList.remove("loading");
+      btn.classList.add("active");
+      btn.textContent = "📍 Near me ✓";
+      placeUserMarker(userLat, userLon);
+      map.setView([userLat, userLon], 13, { animate: true });
+      applyFilters();
+    },
+    () => {
+      btn.classList.remove("loading");
+      btn.textContent = "📍 Near me";
+      alert("Could not get your location. Please allow location access.");
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
 }
 
 document.getElementById("searchInput").addEventListener("input", applyFilters);

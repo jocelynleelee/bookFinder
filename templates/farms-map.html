@@ -227,6 +227,29 @@
   .map-legend h4 { font-size: 10px; font-weight: 600; color: #aaa; text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 2px; }
   .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 
+
+  /* Near me button */
+  .near-me-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .near-me-btn:hover  { border-color: #4a90e2; color: #4a90e2; }
+  .near-me-btn.active { background: #e8f0fb; border-color: #4a90e2; color: #4a90e2; font-weight: 500; }
+  .near-me-btn.loading { opacity: 0.6; cursor: wait; }
+  .dist-badge { font-size: 10px; color: #4a90e2; font-weight: 500; margin-left: 2px; }
+
   /* Loading */
   .loading { position: fixed; inset: 0; background: #f9f9f9; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; gap: 10px; transition: opacity 0.3s; }
   .loading.hidden { opacity: 0; pointer-events: none; }
@@ -259,7 +282,7 @@
   <a href="/childcare-map">🏫 Child Care</a>
   <a href="/restaurants">🍽️ Restaurants</a>
   <a href="/parks">🌳 Parks</a>
-  <a href="/farms">🐄 Farms</a>
+  <a href="/farms" class="active">🐄 Farms</a>
 </nav>
 
 <div class="page-header">
@@ -281,6 +304,7 @@
     <option value="Year-round">Year-round</option>
     <option value="Seasonal">Seasonal</option>
   </select>
+  <button class="near-me-btn" id="nearMeBtn" onclick="toggleNearMe()">📍 Near me</button>
 </div>
 
 <div class="animal-filters">
@@ -682,14 +706,21 @@ function renderList() {
     el.innerHTML = `<div class="no-results">No farms match your filters.</div>`;
     return;
   }
-  el.innerHTML = filtered.map((farm, i) => {
+  // Sort by distance if near me is active
+  const displayList = nearMeActive && userLat
+    ? [...filtered].sort((a,b) => haversine(userLat,userLon,a.lat,a.lon) - haversine(userLat,userLon,b.lat,b.lon))
+    : filtered;
+
+  el.innerHTML = displayList.map((farm, i) => {
     const animalTags = farm.animals.slice(0, 6).map(a =>
       `<span class="animal-tag">${ANIMAL_EMOJIS[a] || "🐾"} ${a}</span>`
     ).join("");
     const more = farm.animals.length > 6 ? `<span class="animal-tag">+${farm.animals.length - 6} more</span>` : "";
+    const dist = (nearMeActive && userLat)
+      ? `<span class="dist-badge">· ${distLabel(haversine(userLat,userLon,farm.lat,farm.lon))}</span>` : "";
     return `<div class="farm-item" id="fi${i}" onclick="selectFarm(${i}, false)">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <div class="farm-name">${farm.name}</div>
+        <div class="farm-name">${farm.name} ${dist}</div>
         <span class="entry-tag ${ENTRY_CSS[farm.admission]}">${ENTRY_EMOJI[farm.admission]} ${farm.admission}</span>
       </div>
       <div class="farm-city">📍 ${farm.city} · ${farm.season}</div>
@@ -817,6 +848,76 @@ function populateFilters() {
   const cities = [...new Set(FARMS.map(f => f.city))].sort();
   const sel = document.getElementById("cityFilter");
   cities.forEach(c => { const o = document.createElement("option"); o.value = c; o.textContent = c; sel.appendChild(o); });
+}
+
+
+/* ── Near me ─────────────────────────────────────────────────────────────── */
+let userLat = null, userLon = null, nearMeActive = false;
+let userMarker = null;
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function distLabel(km) {
+  return km < 1 ? `${Math.round(km*1000)}m` : `${km.toFixed(1)}km`;
+}
+
+function placeUserMarker(lat, lon) {
+  if (userMarker) map.removeLayer(userMarker);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="8" fill="#4a90e2" opacity="0.2"/>
+    <circle cx="10" cy="10" r="5" fill="#4a90e2"/>
+    <circle cx="10" cy="10" r="2" fill="white"/>
+  </svg>`;
+  userMarker = L.marker([lat, lon], {
+    icon: L.icon({ iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`, iconSize:[20,20], iconAnchor:[10,10] }),
+    zIndexOffset: 1000,
+  }).bindPopup("📍 You are here").addTo(map);
+}
+
+function toggleNearMe() {
+  const btn = document.getElementById("nearMeBtn");
+  if (!btn) return;
+
+  if (nearMeActive) {
+    nearMeActive = false; userLat = null; userLon = null;
+    btn.classList.remove("active");
+    btn.textContent = "📍 Near me";
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    applyFilters();
+    return;
+  }
+
+  if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+
+  btn.classList.add("loading");
+  btn.textContent = "📍 Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      nearMeActive = true;
+      btn.classList.remove("loading");
+      btn.classList.add("active");
+      btn.textContent = "📍 Near me ✓";
+      placeUserMarker(userLat, userLon);
+      map.setView([userLat, userLon], 13, { animate: true });
+      applyFilters();
+    },
+    () => {
+      btn.classList.remove("loading");
+      btn.textContent = "📍 Near me";
+      alert("Could not get your location. Please allow location access.");
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
 }
 
 /* ── Boot ── */

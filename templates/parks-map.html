@@ -351,6 +351,29 @@
     50%       { opacity: 0.3; }
   }
 
+
+  /* Near me button */
+  .near-me-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .near-me-btn:hover  { border-color: #4a90e2; color: #4a90e2; }
+  .near-me-btn.active { background: #e8f0fb; border-color: #4a90e2; color: #4a90e2; font-weight: 500; }
+  .near-me-btn.loading { opacity: 0.6; cursor: wait; }
+  .dist-badge { font-size: 10px; color: #4a90e2; font-weight: 500; margin-left: 2px; }
+
   @media (max-width: 700px) {
     .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
     .map-wrap { height: 380px; }
@@ -422,6 +445,7 @@
     <input type="checkbox" id="dogFilter" onchange="applyFilters()">
     🐕 Off-leash
   </label>
+  <button class="near-me-btn" id="nearMeBtn" onclick="toggleNearMe()">📍 Near me</button>
 </div>
 
 <div class="stats-row">
@@ -669,7 +693,17 @@ function renderList() {
     return;
   }
 
-  el.innerHTML = filtered.slice(0, 200).map((park, i) => {
+  const displayParks = (nearMeActive && userLat)
+    ? [...filtered].sort((a,b) => {
+        const aLat = a.googlemapdest?.lat, aLon = a.googlemapdest?.lon;
+        const bLat = b.googlemapdest?.lat, bLon = b.googlemapdest?.lon;
+        const dA = (aLat && aLon) ? haversine(userLat,userLon,aLat,aLon) : 999;
+        const dB = (bLat && bLon) ? haversine(userLat,userLon,bLat,bLon) : 999;
+        return dA - dB;
+      })
+    : filtered;
+
+  el.innerHTML = displayParks.slice(0, 200).map((park, i) => {
     const ha       = park.hectare || 0;
     const haStr    = haToFriendly(ha);
     const szCss    = sizeCss(ha);
@@ -677,9 +711,12 @@ function renderList() {
     const facs     = facilitiesByPark[park.parkid] || [];
     const hasPlay  = facs.some(f => f.toLowerCase().includes("playground"));
     const hasDog   = facs.some(f => f.toLowerCase().includes("off-leash"));
+    const pLat = park.googlemapdest?.lat, pLon = park.googlemapdest?.lon;
+    const dist = (nearMeActive && userLat && pLat && pLon)
+      ? ` <span class="dist-badge">${distLabel(haversine(userLat,userLon,pLat,pLon))}</span>` : "";
 
     return `<div class="park-item" id="pi${i}" onclick="selectPark(${i}, false)">
-      <div class="park-name">${park.name}</div>
+      <div class="park-name">${park.name}${dist}</div>
       <div class="park-meta">${park.neighbourhoodname || "—"} · ${haStr}</div>
       <div class="park-tags">
         <span class="tag ${szCss}">${szLabel}</span>
@@ -1305,6 +1342,76 @@ function renderWildlife(results) {
 }
 
 // ── Boot ──────────────────────────────────────────────────────────────────
+
+/* ── Near me ─────────────────────────────────────────────────────────────── */
+let userLat = null, userLon = null, nearMeActive = false;
+let userMarker = null;
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
+
+function distLabel(km) {
+  return km < 1 ? `${Math.round(km*1000)}m` : `${km.toFixed(1)}km`;
+}
+
+function placeUserMarker(lat, lon) {
+  if (userMarker) map.removeLayer(userMarker);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="8" fill="#4a90e2" opacity="0.2"/>
+    <circle cx="10" cy="10" r="5" fill="#4a90e2"/>
+    <circle cx="10" cy="10" r="2" fill="white"/>
+  </svg>`;
+  userMarker = L.marker([lat, lon], {
+    icon: L.icon({ iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`, iconSize:[20,20], iconAnchor:[10,10] }),
+    zIndexOffset: 1000,
+  }).bindPopup("📍 You are here").addTo(map);
+}
+
+function toggleNearMe() {
+  const btn = document.getElementById("nearMeBtn");
+  if (!btn) return;
+
+  if (nearMeActive) {
+    nearMeActive = false; userLat = null; userLon = null;
+    btn.classList.remove("active");
+    btn.textContent = "📍 Near me";
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    applyFilters();
+    return;
+  }
+
+  if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+
+  btn.classList.add("loading");
+  btn.textContent = "📍 Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      nearMeActive = true;
+      btn.classList.remove("loading");
+      btn.classList.add("active");
+      btn.textContent = "📍 Near me ✓";
+      placeUserMarker(userLat, userLon);
+      map.setView([userLat, userLon], 13, { animate: true });
+      applyFilters();
+    },
+    () => {
+      btn.classList.remove("loading");
+      btn.textContent = "📍 Near me";
+      alert("Could not get your location. Please allow location access.");
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
+}
+
 document.getElementById("searchInput").addEventListener("input", applyFilters);
 document.getElementById("neighbourhoodFilter").addEventListener("change", applyFilters);
 document.getElementById("sizeFilter").addEventListener("change", applyFilters);
