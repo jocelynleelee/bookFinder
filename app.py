@@ -15,6 +15,7 @@ from models import Book, LibraryHistory
 # from childcare_routes import register_childcare_routes
 from vch_routes import register_vch_routes
 from transit_routes import register_translink_routes
+
 # ──────────────────────────────────────────
 # App & DB setup
 # ──────────────────────────────────────────
@@ -27,6 +28,9 @@ register_vch_routes(app)
 register_translink_routes(app)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine)
+
+with open("family_places.json", "r", encoding="utf-8") as f:
+    family_places = json.load(f)
 
 VANCOUVER_COMMUNITY_CENTRES = {
     "hillcrest community centre": (49.2432, -123.1076),
@@ -60,6 +64,16 @@ VANCOUVER_COMMUNITY_CENTRES = {
     "cedar cottage neighbourhood house": (49.2492, -123.0737),
     "collingwood neighbourhood house": (49.2362, -123.0518),
 }
+
+
+def format_event(start_iso, end_iso):
+    start = datetime.fromisoformat(start_iso)
+    end = datetime.fromisoformat(end_iso)
+
+    display_date = start.strftime("%b %d, %Y")  # May 25, 2026
+    display_time = f"{start.strftime('%I:%M %p')} - {end.strftime('%I:%M %p')}"
+
+    return display_date, display_time
 
 
 @contextmanager
@@ -593,6 +607,7 @@ def admin_ingest_outlet():
 def kid_events_page():
     return render_template("kid_events.html")
 
+
 @app.route("/api/kid-events")
 def api_kid_events():
     events = []
@@ -613,24 +628,20 @@ def api_kid_events():
         if not getattr(entry, "bc_latitude", None) or \
             not getattr(entry, "bc_longitude", None):
             continue
-        start_time = getattr(entry, "bc_start_date", "")
-        end_time = getattr(entry, "bc_end_date", "")
-
-        utc_start_time = datetime.fromisoformat(start_time)
-        vancouver_start_time = utc_start_time.astimezone(
-            ZoneInfo("America/Vancouver")
+        start_time = getattr(entry, "bc_start_date_local", "")
+        end_time = getattr(entry, "bc_end_date_local", "")
+        display_date, display_time = format_event(
+            start_time,
+            end_time
         )
-        utc_end_time = datetime.fromisoformat(end_time)
-        vancouver_end_time = utc_end_time.astimezone(
-            ZoneInfo("America/Vancouver")
-        )
+        
         events.append({
             "title": entry.title,
             "location": location,
             "lat": entry.bc_latitude,
             "lon": entry.bc_longitude,
-            "start": vancouver_start_time,
-            "end": vancouver_end_time,
+            "display_date": display_date,
+            "display_time": display_time,
             "summary": entry.get("summary", ""),
             "url": entry.link,
             "source": "library"
@@ -695,21 +706,24 @@ def api_kid_events():
 
         if not coords:
             continue
-        start, end = activity.get("time_range").split("-")[0].strip(), activity.get("time_range").split("-")[1]
+        date_range = activity.get("date_range")
+        time_range_landing_page = activity.get("time_range_landing_page")
+        fee_info = activity.get("fee")
         
         events.append({
             "title": activity.get("name"),
             "location": activity.get("location", {}).get("label"),
             "lat": coords[0],
             "lon": coords[1],
-            "start": start,
-            "end": end,
+            "cta": fee_info,
+            "display_date": date_range,
+            "display_time": time_range_landing_page,
             "summary": activity.get("desc", ""),
             "url": activity.get("detail_url", ""),
             "age": activity.get("age_description"),
             "source": "community"
         })
-
+    events.extend(family_places)
     return jsonify(events)
 
 @app.route("/parks")

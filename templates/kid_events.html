@@ -1,236 +1,591 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Kids events in Greater Vancouver — library storytimes and community centre programs">
+<meta name="theme-color" content="#4a90e2">
+<title>Kid Events</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-    <title>Vancouver Kid Events</title>
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.5;
+  }
 
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-    />
+  /* ── Nav ── */
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a { color: #4a90e2; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  nav a.active { color: #333; font-weight: 600; }
 
-    <style>
-        body {
-            margin: 0;
-            font-family: Arial, sans-serif;
-            background: #f5f5f5;
-        }
+  /* ── Page header ── */
+  .page-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1.2rem 1.5rem 1rem;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: #777; }
 
-        header {
-            padding: 16px;
-            background: #4a90e2;
-            color: white;
-            font-size: 24px;
-            font-weight: bold;
-        }
+  /* ── Filters bar ── */
+  .filters-bar {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.75rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filters-bar input {
+    flex: 1;
+    min-width: 180px;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  .filters-bar input:focus { border-color: #4a90e2; background: #fff; }
 
-        #layout {
-            display: flex;
-            height: calc(100vh - 64px);
-        }
+  .filter-chip {
+    padding: 7px 14px;
+    border: 1px solid #ddd;
+    border-radius: 20px;
+    font-size: 13px;
+    cursor: pointer;
+    background: #fafafa;
+    color: #555;
+    font-family: inherit;
+    transition: all 0.15s;
+    white-space: nowrap;
+  }
+  .filter-chip:hover { border-color: #4a90e2; background: #f0f6ff; color: #4a90e2; }
+  .filter-chip.active { font-weight: 500; }
+  .filter-chip.active.all      { background: #e8f0fb; border-color: #4a90e2; color: #2c6dbf; }
+  .filter-chip.active.library  { background: #dff0ff; border-color: #0066aa; color: #0066aa; }
+  .filter-chip.active.community{ background: #e8f4e8; border-color: #228822; color: #228822; }
 
-        #map {
-            flex: 1;
-        }
+  /* ── Stats row ── */
+  .stats-row {
+    padding: 0.6rem 1.5rem;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+    background: #f9f9f9;
+    border-bottom: 1px solid #eee;
+    font-size: 13px;
+    color: #555;
+  }
+  .stat-pill { background: #e8f0fb; color: #2c6dbf; border-radius: 20px; padding: 3px 12px; font-size: 12px; font-weight: 500; }
+  .stat-pill-blue   { background: #dff0ff; color: #0066aa; }
+  .stat-pill-green  { background: #e8f4e8; color: #228822; }
 
-        #sidebar {
-            width: 420px;
-            overflow-y: auto;
-            background: white;
-            border-left: 1px solid #ddd;
-            padding: 16px;
-        }
+  /* ── Main layout ── */
+  .main {
+    display: grid;
+    grid-template-columns: 380px 1fr;
+    height: calc(100vh - 172px);
+  }
 
-        .event-card {
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            padding: 12px;
-            margin-bottom: 12px;
-            background: white;
-        }
+  /* ── Event list ── */
+  .event-list {
+    background: #fff;
+    border-right: 1px solid #e0e0e0;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+  .event-list::-webkit-scrollbar { width: 4px; }
+  .event-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
 
-        .event-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 6px;
-        }
+  .event-item {
+    padding: 12px 14px;
+    border-bottom: 1px solid #f0f0f0;
+    cursor: pointer;
+    transition: background 0.1s;
+  }
+  .event-item:hover { background: #f0f6ff; }
+  .event-item.active { background: #e8f0fb; border-left: 3px solid #4a90e2; padding-left: 11px; }
 
-        .event-location {
-            color: #555;
-            margin-bottom: 6px;
-        }
+  .event-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: #222;
+    margin-bottom: 3px;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .event-meta { font-size: 11px; color: #888; margin-bottom: 4px; }
+  .event-tags { display: flex; gap: 4px; flex-wrap: wrap; margin-top: 5px; }
 
-        .event-source {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 12px;
-            margin-bottom: 10px;
-        }
+  .source-tag {
+    display: inline-block;
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 20px;
+    font-weight: 500;
+  }
+  .source-library   { background: #dff0ff; color: #0066aa; }
+  .source-community { background: #e8f4e8; color: #228822; }
 
-        .library {
-            background: #dff0ff;
-            color: #0066aa;
-        }
+  .no-events { padding: 2rem 1rem; text-align: center; color: #aaa; font-size: 13px; }
+  .list-footer { padding: 10px 14px; font-size: 11px; color: #aaa; text-align: center; border-top: 1px solid #f0f0f0; background: #fafafa; }
 
-        .community {
-            background: #e8ffe8;
-            color: #228822;
-        }
+  /* ── Map ── */
+  .map-wrap { position: relative; }
+  #map { width: 100%; height: 100%; }
 
-        .event-link {
-            display: inline-block;
-            margin-top: 10px;
-            text-decoration: none;
-            color: #4a90e2;
-            font-weight: bold;
-        }
+  /* ── Detail card ── */
+  .detail-card {
+    display: none;
+    position: absolute;
+    bottom: 16px;
+    left: 16px;
+    width: 310px;
+    max-height: calc(100% - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 12px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+    z-index: 1000;
+    padding: 16px;
+  }
+  .detail-card.visible { display: block; }
+  .detail-card::-webkit-scrollbar { width: 4px; }
+  .detail-card::-webkit-scrollbar-thumb { background: #ddd; border-radius: 4px; }
 
-        #filters {
-            margin-bottom: 16px;
-        }
+  .detail-close {
+    position: absolute; top: 12px; right: 14px;
+    background: none; border: none; font-size: 18px; color: #aaa; cursor: pointer;
+  }
+  .detail-close:hover { color: #333; }
 
-        button {
-            padding: 8px 12px;
-            margin-right: 8px;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            background: #4a90e2;
-            color: white;
-        }
-    </style>
+  .detail-title { font-size: 15px; font-weight: 700; color: #222; margin-bottom: 6px; padding-right: 24px; }
+  .detail-section-title {
+    font-size: 10px; font-weight: 600; color: #aaa;
+    text-transform: uppercase; letter-spacing: 0.05em; margin: 10px 0 5px;
+  }
+  .detail-row { font-size: 12px; color: #555; margin-bottom: 4px; display: flex; gap: 6px; }
+  .detail-row .lbl { color: #aaa; min-width: 60px; flex-shrink: 0; }
+  .detail-row a { color: #4a90e2; text-decoration: none; }
+  .detail-row a:hover { text-decoration: underline; }
+
+  .view-event-btn {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 8px 16px;
+    background: #4a90e2;
+    color: #fff;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .view-event-btn:hover { background: #357abd; }
+
+  /* ── Loading ── */
+  .loading {
+    position: fixed; inset: 0; background: #f9f9f9;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 9999; gap: 10px; transition: opacity 0.3s;
+  }
+  .loading.hidden { opacity: 0; pointer-events: none; }
+  .loading p { font-size: 14px; color: #888; }
+  .spinner { width: 30px; height: 30px; border: 3px solid #e0e0e0; border-top-color: #4a90e2; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+
+  /* Near me button */
+  .near-me-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    background: #fafafa;
+    font-size: 13px;
+    font-family: inherit;
+    color: #555;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.15s;
+    flex-shrink: 0;
+  }
+  .near-me-btn:hover  { border-color: #4a90e2; color: #4a90e2; }
+  .near-me-btn.active { background: #e8f0fb; border-color: #4a90e2; color: #4a90e2; font-weight: 500; }
+  .near-me-btn.loading { opacity: 0.6; cursor: wait; }
+  .dist-badge { font-size: 10px; color: #4a90e2; font-weight: 500; margin-left: 2px; }
+
+  @media (max-width: 700px) {
+    .main { grid-template-columns: 1fr; grid-template-rows: 380px 1fr; height: auto; }
+    .map-wrap { height: 380px; }
+    .event-list { height: 300px; }
+  }
+</style>
 </head>
 <body>
 
-<header>
-    Vancouver Kid Events
-</header>
+<div class="loading" id="loading">
+  <div style="font-size:32px">📅</div>
+  <div class="spinner"></div>
+  <p>Loading events...</p>
+</div>
 
-<div id="layout">
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants">🍽️ Restaurants</a>
+  <a href="/parks">🌳 Parks</a>
+  <a href="/farms">🐄 Farms</a>
+  <a href="/kid-events">🎪 Events</a>
+</nav>
+
+<div class="page-header">
+  <h1>🎪 Kid Events</h1>
+  <p>Library storytimes and community centre programs in Greater Vancouver</p>
+</div>
+
+<div class="filters-bar">
+  <input type="text" id="searchInput" placeholder="🔍 Search events..." oninput="applyFilters()">
+  <button class="near-me-btn" id="nearMeBtn" onclick="toggleNearMe()">📍 Near me</button>
+  <button class="filter-chip active all" data-source="all" onclick="setSource('all', this)">All events</button>
+  <button class="filter-chip" data-source="library" onclick="setSource('library', this)">📚 Libraries</button>
+  <button class="filter-chip" data-source="community" onclick="setSource('community', this)">🏫 Community centres</button>
+  <button class="filter-chip" data-source="family_place" onclick="setSource('family_place', this)">👶 Family Places</button>
+</div>
+
+<div class="stats-row">
+  <span>Showing</span>
+  <span class="stat-pill" id="statShowing">—</span>
+  <span>events</span>
+  <span>·</span>
+  <span class="stat-pill stat-pill-blue" id="statLibrary">—</span>
+  <span>library</span>
+  <span>·</span>
+  <span class="stat-pill stat-pill-green" id="statCommunity">—</span>
+  <span>community centre</span>
+  <span class="stat-pill stat-pill-red" id="statFamilyPlace">—</span>
+  <span>family place</span>
+</div>
+
+<div class="main">
+  <div class="event-list" id="eventList">
+    <div class="no-events">Loading events...</div>
+  </div>
+  <div class="map-wrap">
     <div id="map"></div>
+    <div class="detail-card" id="detailCard">
+      <button class="detail-close" onclick="closeDetail()">×</button>
+      <div class="detail-title" id="dTitle"></div>
+      <div style="margin-bottom:8px" id="dTags"></div>
 
-    <div id="sidebar">
-        <div id="filters">
-            <button onclick="filterEvents('all')">All</button>
-            <button onclick="filterEvents('library')">Libraries</button>
-            <button onclick="filterEvents('community')">Community Centres</button>
-        </div>
+      <div class="detail-section-title">Details</div>
+      <div class="detail-row"><span class="lbl">📍 Where</span><span id="dLocation"></span></div>
+      <div class="detail-row"><span class="lbl">📅 Date</span><span id="dDate"></span></div>
+      <div class="detail-row"><span class="lbl">🕐 Time</span><span id="dTime"></span></div>
 
-        <div id="events"></div>
+      <div class="detail-section-title">Description</div>
+      <div id="dSummary" style="font-size:12px;color:#555;line-height:1.6"></div>
+
+      <a class="view-event-btn" id="dLink" href="#" target="_blank" rel="noopener">
+        View event ↗
+      </a>
     </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
-    const map = L.map('map').setView([49.25, -123.12], 11);
+let map, allEvents = [], filtered = [], markers = [], activeIdx = null;
+let currentSource = "all";
 
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '&copy; OpenStreetMap contributors'
-    }).addTo(map);
+/* ── Map ── */
+function initMap() {
+  map = L.map("map").setView([49.25, -123.12], 11);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: '&copy; <a href="https://openstreetmap.org/copyright">OpenStreetMap</a>',
+    maxZoom: 19,
+  }).addTo(map);
+}
 
-    let allEvents = [];
-    let markers = [];
+/* ── Markers ── */
+function makeIcon(source) {
+  const color = source === "library" ? "#0066aa" : "#228822";
+  const emoji = source === "library" ? "📚" : "🏫";
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="36" viewBox="0 0 28 36">
+    <path d="M14 0C6.268 0 0 6.268 0 14c0 9.333 14 22 14 22s14-12.667 14-22C28 6.268 21.732 0 14 0z" fill="${color}"/>
+    <circle cx="14" cy="14" r="8" fill="white"/>
+    <text x="14" y="18" font-size="9" text-anchor="middle">${emoji}</text>
+  </svg>`;
+  return L.icon({
+    iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`,
+    iconSize: [28, 36], iconAnchor: [14, 36], popupAnchor: [0, -38],
+  });
+}
 
-    async function loadEvents() {
-        const response = await fetch('/api/kid-events');
-        allEvents = await response.json();
+function renderMarkers() {
+  markers.forEach(m => map.removeLayer(m));
+  markers = [];
+  filtered.forEach((ev, i) => {
+    if (!ev.lat || !ev.lon) return;
+    const m = L.marker([ev.lat, ev.lon], { icon: makeIcon(ev.source) });
+    m.on("click", () => selectEvent(i, true));
+    m.addTo(map);
+    markers.push(m);
+    ev._marker = m;
+  });
+}
 
-        renderEvents(allEvents);
-        renderMarkers(allEvents);
-    }
+/* ── Event list ── */
+function renderList() {
+  const el = document.getElementById("eventList");
+  if (!filtered.length) {
+    el.innerHTML = `<div class="no-events">No events match your filters.</div>`;
+    return;
+  }
+  const displayList = (nearMeActive && userLat)
+    ? [...filtered].sort((a, b) => {
+        const dA = (a.lat && a.lon) ? haversine(userLat, userLon, a.lat, a.lon) : 999;
+        const dB = (b.lat && b.lon) ? haversine(userLat, userLon, b.lat, b.lon) : 999;
+        return dA - dB;
+      })
+    : filtered;
 
-    function clearMarkers() {
-        markers.forEach(marker => map.removeLayer(marker));
-        markers = [];
-    }
+  el.innerHTML = displayList.map((ev, i) => {
+    const srcCss   = `source-${ev.source}`;
+    const sourceLabels = {
+    library: "📚 Library",
+    community: "🏫 Community Centre",
+    family_place: "👶 Family Place"
+    };
+    
+    const srcLabel = sourceLabels[ev.source] || "📍 Other";
+    const priceText = ev.price
+    ? ` · 💰 ${ev.price.drop_in_fee || 'See details'}`
+    : ` · 💰 Free / Drop-in`;
+    const ctaHTML = ev.cta
+    ? `<a href="${ev.cta.href}" target="_blank" class="cta-btn">
+        💰 ${ev.cta.label || "View details"}
+        </a>`
+    : "";
+    const dist = (nearMeActive && userLat && ev.lat && ev.lon)
+      ? ` <span class="dist-badge">${distLabel(haversine(userLat, userLon, ev.lat, ev.lon))}</span>` : "";
+    return `<div class="event-item" id="ei${i}" onclick="selectEvent(${i}, false)">
+      <div class="event-title">${ev.title || "—"}${dist}</div>
+      <div class="event-meta">
+        ${ev.location ? `📍 ${ev.location}` : ""}
+        ${ev.display_date ? ` · 📅 ${ev.display_date}` : ""}
+        ${ev.display_time ? ` · 🕐 ${ev.display_time}` : ""}
+        ${formatPrice(ev)}
+        ${ctaHTML}
+      </div>
+      <div class="event-tags">
+        <span class="source-tag ${srcCss}">${srcLabel}</span>
+      </div>
+    </div>`;
+  }).join("") + `<div class="list-footer">${filtered.length} event${filtered.length===1?"":"s"}</div>`;
+}
+function formatPrice(ev) {
+  if (!ev.price) return '';
+  return ` · 💰 ${ev.price.drop_in_fee || ''}`;
+}
+/* ── Select event ── */
+function selectEvent(idx, fromMap) {
+  const ev = filtered[idx];
+  if (!ev) return;
 
-    function renderMarkers(events) {
-        clearMarkers();
+  if (activeIdx !== null) {
+    document.getElementById(`ei${activeIdx}`)?.classList.remove("active");
+  }
+  activeIdx = idx;
+  document.getElementById(`ei${idx}`)?.classList.add("active");
+  document.getElementById(`ei${idx}`)?.scrollIntoView({ block: "nearest" });
 
-        events.forEach(event => {
-            if (!event.lat || !event.lon) {
-                return;
-            }
-            const start_time = new Date(event.start).toLocaleString("en-CA", {
-            timeZone: "America/Vancouver",
-            
-            });
-            // const start_time = "TEST VANCOVER TIME";
-            const marker = L.marker([event.lat, event.lon])
-                .addTo(map)
-                .bindPopup(function () {
-  return `
-    <strong>${event.title}</strong><br>
-    ${event.location}<br>
-    ${new Date(start_time).toLocaleString("en-CA", {
-      timeZone: "America/Vancouver"
-    })}
-  `;
-});
+  if (ev.lat && ev.lon && !fromMap) map.setView([ev.lat, ev.lon], 15, { animate: true });
 
-            markers.push(marker);
-        });
-    }
+  const srcCss   = `source-${ev.source}`;
+  const srcLabel = ev.source === "library" ? "📚 Library" : "🏫 Community Centre";
 
-    function renderEvents(events) {
-        const container = document.getElementById('events');
+  document.getElementById("dTitle").textContent = ev.title || "—";
+  document.getElementById("dTags").innerHTML =
+    `<span class="source-tag ${srcCss}">${srcLabel}</span>`;
+  document.getElementById("dLocation").textContent = ev.location || "—";
+  document.getElementById("dDate").textContent     = ev.display_date || "—";
+  document.getElementById("dTime").textContent     = ev.display_time || "—";
+  document.getElementById("dSummary").textContent  = ev.summary || "No description available.";
+  document.getElementById("dLink").href = ev.url || "#";
 
-        container.innerHTML = '';
+  document.getElementById("detailCard").classList.add("visible");
+}
 
-        events.forEach(event => {
-            const card = document.createElement('div');
-            card.className = 'event-card';
-            const start_time = new Date(event.start).toLocaleString("en-CA", {
-            timeZone: "America/Vancouver",
-            
-            });
-            card.innerHTML = `
-                <div class="event-title">${event.title}</div>
+function closeDetail() {
+  document.getElementById("detailCard").classList.remove("visible");
+  document.getElementById(`ei${activeIdx}`)?.classList.remove("active");
+  activeIdx = null;
+}
 
-                <div class="event-location">
-                    ${event.location || 'Unknown location'}
-                </div>
+/* ── Filters ── */
+function setSource(source, btn) {
+  currentSource = source;
+  document.querySelectorAll(".filter-chip").forEach(c => {
+    c.classList.remove("active", "all", "library", "community", "family-place");
+  });
+  btn.classList.add("active", source);
+  applyFilters();
+}
 
-                <div class="event-source ${event.source}">
-                    ${event.source}
-                </div>
+function applyFilters() {
+  const q = document.getElementById("searchInput").value.toLowerCase();
+  filtered = allEvents.filter(ev => {
+    if (currentSource !== "all" && ev.source !== currentSource) return false;
+    if (q && !(ev.title||"").toLowerCase().includes(q) && !(ev.location||"").toLowerCase().includes(q)) return false;
+    return true;
+  });
 
-                <div>
-                    ${start_time || ''}
-                </div>
+  activeIdx = null;
+  closeDetail();
+  renderMarkers();
+  renderList();
+  updateStats();
 
-                <div>
-                    ${event.summary || ''}
-                </div>
+  const pts = filtered.filter(e => e.lat && e.lon).map(e => [e.lat, e.lon]);
+  if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 14, animate: true });
+}
 
-                <a class="event-link" href="${event.url}" target="_blank">
-                    View Event
-                </a>
-            `;
+function updateStats() {
+  const lib  = filtered.filter(e => e.source === "library").length;
+  const comm = filtered.filter(e => e.source === "community").length;
+  const fam = filtered.filter(e => e.source === "family_place").length;
+  document.getElementById("statShowing").textContent  = filtered.length.toLocaleString();
+  document.getElementById("statLibrary").textContent  = lib.toLocaleString();
+  document.getElementById("statCommunity").textContent = comm.toLocaleString();
+  document.getElementById("statFamilyPlace").textContent = fam.toLocaleString();
+}
 
-            container.appendChild(card);
-        });
-    }
+/* ── Load events ── */
+async function loadEvents() {
+  try {
+    const resp = await fetch("/api/kid-events");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    allEvents = await resp.json();
+    filtered  = [...allEvents];
+    renderMarkers();
+    renderList();
+    updateStats();
+    const pts = filtered.filter(e => e.lat && e.lon).map(e => [e.lat, e.lon]);
+    if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 12 });
+  } catch(e) {
+    document.getElementById("eventList").innerHTML =
+      `<div class="no-events">Could not load events.<br><small style="color:#bbb">${e.message}</small></div>`;
+  } finally {
+    const ov = document.getElementById("loading");
+    ov.classList.add("hidden");
+    setTimeout(() => ov.remove(), 300);
+  }
+}
 
-    function filterEvents(source) {
-        if (source === 'all') {
-            renderEvents(allEvents);
-            renderMarkers(allEvents);
-            return;
-        }
 
-        const filtered = allEvents.filter(e => e.source === source);
+/* ── Near me ─────────────────────────────────────────────────────────────── */
+let userLat = null, userLon = null, nearMeActive = false;
+let userMarker = null;
 
-        renderEvents(filtered);
-        renderMarkers(filtered);
-    }
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371;
+  const dLat = (lat2-lat1)*Math.PI/180;
+  const dLon = (lon2-lon1)*Math.PI/180;
+  const a = Math.sin(dLat/2)**2 +
+    Math.cos(lat1*Math.PI/180)*Math.cos(lat2*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+}
 
-    loadEvents();
+function distLabel(km) {
+  return km < 1 ? `${Math.round(km*1000)}m` : `${km.toFixed(1)}km`;
+}
+
+function placeUserMarker(lat, lon) {
+  if (userMarker) map.removeLayer(userMarker);
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 20 20">
+    <circle cx="10" cy="10" r="8" fill="#4a90e2" opacity="0.2"/>
+    <circle cx="10" cy="10" r="5" fill="#4a90e2"/>
+    <circle cx="10" cy="10" r="2" fill="white"/>
+  </svg>`;
+  userMarker = L.marker([lat, lon], {
+    icon: L.icon({ iconUrl: `data:image/svg+xml,${encodeURIComponent(svg)}`, iconSize:[20,20], iconAnchor:[10,10] }),
+    zIndexOffset: 1000,
+  }).bindPopup("📍 You are here").addTo(map);
+}
+
+function toggleNearMe() {
+  const btn = document.getElementById("nearMeBtn");
+  if (!btn) return;
+
+  if (nearMeActive) {
+    nearMeActive = false; userLat = null; userLon = null;
+    btn.classList.remove("active");
+    btn.textContent = "📍 Near me";
+    if (userMarker) { map.removeLayer(userMarker); userMarker = null; }
+    applyFilters();
+    return;
+  }
+
+  if (!navigator.geolocation) { alert("Geolocation not supported."); return; }
+
+  btn.classList.add("loading");
+  btn.textContent = "📍 Locating...";
+
+  navigator.geolocation.getCurrentPosition(
+    pos => {
+      userLat = pos.coords.latitude;
+      userLon = pos.coords.longitude;
+      nearMeActive = true;
+      btn.classList.remove("loading");
+      btn.classList.add("active");
+      btn.textContent = "📍 Near me ✓";
+      placeUserMarker(userLat, userLon);
+      map.setView([userLat, userLon], 13, { animate: true });
+      applyFilters();
+    },
+    () => {
+      btn.classList.remove("loading");
+      btn.textContent = "📍 Near me";
+      alert("Could not get your location. Please allow location access.");
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  );
+}
+
+/* ── Boot ── */
+initMap();
+loadEvents();
 </script>
-
 </body>
 </html>
