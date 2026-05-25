@@ -1,0 +1,62 @@
+[
+  {
+    "title": "Eastside Family Place Drop-In",
+    "location": "Eastside Family Place",
+    "lat": 49.2777,
+    "lon": -123.0715,
+    "display_date": "Mon–Fri (weekly recurring)",
+    "display_time": "9:00 AM – 12:00 PM (varies by program)",
+    "price": {
+      "drop_in_fee": "CAD 1–3 per family per visit (suggested donation / subsidized)",
+      "membership": "CAD 30 per year (required)"
+    },
+    "summary": "Family drop-in, baby & me groups, parenting support, sensory play programs for ages 0–5.",
+    "url": "https://eastsidefamilyplace.org",
+    "source": "family_place"
+  },
+  {
+    "title": "South Vancouver Family Place Drop-In",
+    "location": "South Vancouver Family Place",
+    "lat": 49.2156,
+    "lon": -123.0375,
+    "display_date": "Tue, Wed, Thu, Fri (weekly recurring)",
+    "display_time": "9:00 AM – 12:00 PM (varies by day)",
+    "price": {
+      "drop_in_fee": "CAD 1–4 per family per visit (low-cost community program)",
+      "membership": "CAD 20–30 per year (required)"
+    },
+    "summary": "Parent & tot drop-in with circle time, crafts, gym play, and outdoor sandbox for ages 0–5.",
+    "url": "https://www.southvancouverfamilyplace.org/",
+    "source": "family_place"
+  },
+  {
+    "title": "West Side Family Place Drop-In",
+    "location": "West Side Family Place",
+    "lat": 49.2635,
+    "lon": -123.169,
+    "display_date": "Mon–Fri (weekly recurring)",
+    "display_time": "Morning drop-in sessions (varies by program)",
+    "price": {
+      "drop_in_fee": "CAD 2–4 per family per visit",
+      "membership": "Required (small annual fee, varies by household)"
+    },
+    "summary": "Family drop-in, play & learn, parenting support, baby groups, and early childhood activities.",
+    "url": "https://www.westsidefamilyplace.com/",
+    "source": "family_place"
+  },
+  {
+    "title": "Mount Pleasant Family Centre Drop-In",
+    "location": "Mount Pleasant Family Centre",
+    "lat": 49.262,
+    "lon": -123.0995,
+    "display_date": "Weekly recurring programs (varies)",
+    "display_time": "Morning & afternoon sessions (varies)",
+    "price": {
+      "drop_in_fee": "CAD 1–5 per family per visit (sliding scale)",
+      "membership": "Annual membership required (low-cost nonprofit)"
+    },
+    "summary": "Parent-child drop-in, early learning, play-based programs, parenting support, and baby groups (0–5).",
+    "url": "https://www.vancouverfamilyconnections.org/",
+    "source": "family_place"
+  }
+]
