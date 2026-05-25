@@ -617,7 +617,7 @@ def api_kid_events():
     # -------------------------------------------------
 
     rss_url = (
-        "https://gateway.bibliocommons.com/v2/libraries/vpl/rss/events?audiences=53c940484246f6147c00000f%2C53c940484246f6147c00000d"
+        "https://gateway.bibliocommons.com/v2/libraries/vpl/rss/events?audiences=53c940484246f6147c00000d%2C53c940484246f6147c00000e%2C53c940484246f6147c00000f"
     )
 
     feed = feedparser.parse(rss_url)
