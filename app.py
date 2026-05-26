@@ -15,6 +15,7 @@ from models import Book, LibraryHistory
 # from childcare_routes import register_childcare_routes
 from vch_routes import register_vch_routes
 from transit_routes import register_translink_routes
+from baby_food_routes import register_baby_food_routes
 
 # ──────────────────────────────────────────
 # App & DB setup
@@ -26,6 +27,7 @@ app = Flask(__name__)
 CORS(app)
 register_vch_routes(app)
 register_translink_routes(app)
+register_baby_food_routes(app)
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 Session = sessionmaker(bind=engine)
 

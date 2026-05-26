@@ -1,0 +1,671 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="Scan a food barcode to check if it's safe for your baby">
+<meta name="theme-color" content="#4a90e2">
+<title>Baby Food Scanner</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: #f9f9f9;
+    color: #333;
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  nav {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 0.6rem 1.2rem;
+    display: flex;
+    gap: 1.2rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  nav a { color: #4a90e2; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; }
+  nav a:hover { text-decoration: underline; }
+  nav a.active { color: #333; font-weight: 600; }
+
+  .page-header {
+    background: #fff;
+    border-bottom: 1px solid #e0e0e0;
+    padding: 1.2rem 1.5rem 1rem;
+  }
+  .page-header h1 { font-size: 22px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .page-header p { font-size: 13px; color: #777; }
+
+  .container {
+    max-width: 680px;
+    margin: 2rem auto;
+    padding: 0 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.25rem;
+  }
+
+  .card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+  .card h2 { font-size: 15px; font-weight: 600; color: #222; margin-bottom: 1rem; }
+
+  /* Age selector */
+  .age-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+  .age-row label { font-size: 13px; color: #555; font-weight: 500; }
+  .age-row select {
+    padding: 7px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    color: #333;
+    background: #fafafa;
+    outline: none;
+    cursor: pointer;
+  }
+  .age-row select:focus { border-color: #4a90e2; }
+  .age-badge {
+    font-size: 12px; padding: 3px 10px;
+    border-radius: 20px; background: #e8f0fb;
+    color: #2c6dbf; font-weight: 500;
+  }
+
+  /* Scanner area */
+  .scanner-wrap {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    aspect-ratio: 4/3;
+    display: none;
+  }
+  .scanner-wrap video,
+  .scanner-wrap canvas { width: 100%; height: 100%; object-fit: cover; }
+  .scanner-wrap canvas { position: absolute; top: 0; left: 0; }
+
+  /* Viewfinder overlay */
+  .viewfinder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .viewfinder-box {
+    width: 70%;
+    height: 35%;
+    border: 2px solid #4a90e2;
+    border-radius: 8px;
+    box-shadow: 0 0 0 1000px rgba(0,0,0,0.35);
+    position: relative;
+  }
+  .viewfinder-line {
+    position: absolute;
+    left: 5%;
+    right: 5%;
+    top: 50%;
+    height: 2px;
+    background: rgba(74,144,226,0.7);
+    animation: scan-line 2s ease-in-out infinite;
+  }
+  @keyframes scan-line {
+    0%, 100% { top: 15%; }
+    50%       { top: 85%; }
+  }
+  .viewfinder-hint {
+    position: absolute;
+    bottom: -28px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    color: #fff;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
+  }
+
+  /* Buttons */
+  .btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: #4a90e2;
+    color: #fff;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .btn-primary:hover:not(:disabled) { background: #357abd; }
+  .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .btn-secondary {
+    width: 100%;
+    padding: 10px;
+    background: #fafafa;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    font-size: 14px;
+    font-family: inherit;
+    cursor: pointer;
+    color: #555;
+    transition: all 0.15s;
+  }
+  .btn-secondary:hover { border-color: #4a90e2; color: #4a90e2; }
+
+  /* Manual barcode input */
+  .manual-row {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .manual-row input {
+    flex: 1;
+    padding: 9px 12px;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    outline: none;
+  }
+  .manual-row input:focus { border-color: #4a90e2; }
+  .manual-row button {
+    padding: 9px 16px;
+    background: #4a90e2;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 13px;
+    font-family: inherit;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .manual-row button:hover { background: #357abd; }
+
+  /* Spinner */
+  .spinner {
+    width: 16px; height: 16px;
+    border: 2px solid rgba(255,255,255,0.4);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Results ── */
+  .overall-banner {
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .banner-safe    { background: #e8f4e8; border: 1px solid #b8ddb8; }
+  .banner-caution { background: #fff8e1; border: 1px solid #f0d080; }
+  .banner-avoid   { background: #fde8e8; border: 1px solid #f0b0b0; }
+  .banner-icon    { font-size: 32px; flex-shrink: 0; }
+  .banner-product { font-size: 12px; color: #888; margin-bottom: 4px; }
+  .banner-title   { font-size: 16px; font-weight: 700; color: #222; margin-bottom: 4px; }
+  .banner-reason  { font-size: 13px; color: #555; }
+  .banner-age     { font-size: 12px; color: #888; margin-top: 6px; font-style: italic; }
+
+  .product-img {
+    width: 80px; height: 80px;
+    object-fit: contain;
+    border-radius: 8px;
+    border: 1px solid #eee;
+    background: #fafafa;
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-size: 11px; font-weight: 600; color: #aaa;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    margin-bottom: 8px;
+  }
+
+  .item-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 8px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+    font-size: 13px;
+  }
+  .item-row:last-child { border-bottom: none; }
+
+  .status-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+  .item-name   { font-weight: 500; color: #222; }
+  .item-reason { font-size: 12px; color: #888; margin-top: 2px; }
+
+  .allergen-tag {
+    display: inline-block;
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    background: #fff8e1;
+    color: #7a5c00;
+    font-weight: 500;
+    margin: 2px;
+  }
+
+  .tip-item {
+    display: flex;
+    gap: 8px;
+    font-size: 13px;
+    color: #555;
+    padding: 5px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+  }
+  .tip-item:last-child { border-bottom: none; }
+
+  .disclaimer-box {
+    background: #f9f9f9;
+    border: 1px solid #e0e0e0;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 11px;
+    color: #aaa;
+    line-height: 1.5;
+  }
+
+  .not-found-box {
+    background: #fff8e1;
+    border: 1px solid #f0d080;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    font-size: 13px;
+    color: #7a5c00;
+  }
+
+  .error-box {
+    background: #fde8e8;
+    border: 1px solid #f0b0b0;
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    font-size: 13px;
+    color: #c0392b;
+  }
+
+  @media (max-width: 600px) {
+    .container { padding: 0 1rem; margin: 1rem auto; }
+  }
+</style>
+</head>
+<body>
+
+<nav>
+  <a href="/">📚 Books</a>
+  <a href="/bookdeals">🔥 Deals</a>
+  <a href="/trending">📈 Trending Books</a>
+  <a href="/availability-page">📊 Charts</a>
+  <a href="/schedule">📅 Schedule</a>
+  <a href="/childcare-map">🏫 Child Care</a>
+  <a href="/restaurants">🍽️ Restaurants</a>
+  <a href="/parks">🌳 Parks</a>
+  <a href="/farms">🐄 Farms</a>
+  <a href="/events">🎪 Events</a>
+  <a href="/baby-food-scanner" class="active">🍼 Food Scanner</a>
+</nav>
+
+<div class="page-header">
+  <h1>🍼 Baby Food Scanner</h1>
+  <p>Scan any food barcode to check if it's safe for your baby — powered by Open Food Facts</p>
+</div>
+
+<div class="container">
+
+  <!-- Input card -->
+  <div class="card" id="inputCard">
+    <h2>📷 Scan a barcode</h2>
+
+    <!-- Age -->
+    <div class="age-row">
+      <label for="ageSelect">👶 Baby's age:</label>
+      <select id="ageSelect" onchange="updateAgeBadge()">
+        <option value="4">4 months</option>
+        <option value="5">5 months</option>
+        <option value="6" selected>6 months</option>
+        <option value="7">7 months</option>
+        <option value="8">8 months</option>
+        <option value="9">9 months</option>
+        <option value="10">10 months</option>
+        <option value="11">11 months</option>
+        <option value="12">12 months (1 year)</option>
+        <option value="14">14 months</option>
+        <option value="16">16 months</option>
+        <option value="18">18 months</option>
+        <option value="20">20 months</option>
+        <option value="22">22 months</option>
+        <option value="24">24 months (2 years)</option>
+      </select>
+      <span class="age-badge" id="ageBadge">Starting solids</span>
+    </div>
+
+    <!-- Camera scanner -->
+    <div class="scanner-wrap" id="scannerWrap">
+      <div id="interactive" class="viewport"></div>
+      <div class="viewfinder">
+        <div class="viewfinder-box">
+          <div class="viewfinder-line"></div>
+          <div class="viewfinder-hint">Align barcode within the box</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scan button -->
+    <button class="btn-primary" id="scanBtn" onclick="startScanner()" style="margin-bottom:10px">
+      📷 Scan barcode with camera
+    </button>
+
+    <button class="btn-secondary" id="stopBtn" onclick="stopScanner()" style="display:none;margin-bottom:10px">
+      ⏹ Stop camera
+    </button>
+
+    <!-- Manual input fallback -->
+    <div style="font-size:12px;color:#aaa;margin:10px 0;text-align:center">— or enter barcode manually —</div>
+    <div class="manual-row">
+      <input type="number" id="manualBarcode" placeholder="e.g. 0 12345 67890 5" inputmode="numeric">
+      <button onclick="lookupManual()">🔍 Look up</button>
+    </div>
+
+    <!-- Loading -->
+    <div id="loadingRow" style="display:none;margin-top:14px;text-align:center;color:#888;font-size:13px">
+      <div class="spinner" id="spinner" style="display:inline-block;vertical-align:middle;margin-right:8px;border-top-color:#4a90e2;border-color:#ddd;border-top-color:#4a90e2"></div>
+      Looking up product...
+    </div>
+  </div>
+
+  <!-- Error / not found -->
+  <div id="errorBox" style="display:none"></div>
+
+  <!-- Results -->
+  <div id="results" style="display:none;flex-direction:column;gap:1rem">
+
+    <!-- Overall -->
+    <div class="overall-banner" id="overallBanner">
+      <div class="banner-icon" id="bannerIcon"></div>
+      <div style="flex:1">
+        <div class="banner-product" id="bannerProduct"></div>
+        <div class="banner-title" id="bannerTitle"></div>
+        <div class="banner-reason" id="bannerReason"></div>
+        <div class="banner-age" id="bannerAge"></div>
+      </div>
+      <img class="product-img" id="productImg" src="" alt="" style="display:none">
+    </div>
+
+    <!-- Allergens -->
+    <div class="card" id="allergensCard" style="display:none">
+      <div class="section-title">⚠️ Allergens declared on label</div>
+      <div id="allergensList"></div>
+    </div>
+
+    <!-- Ingredients -->
+    <div class="card" id="ingredientsCard" style="display:none">
+      <div class="section-title">Ingredients to note</div>
+      <div id="ingredientsList"></div>
+    </div>
+
+    <!-- Nutrition -->
+    <div class="card" id="nutritionCard" style="display:none">
+      <div class="section-title">Nutrition flags</div>
+      <div id="nutritionList"></div>
+    </div>
+
+    <!-- Tips -->
+    <div class="card" id="tipsCard" style="display:none">
+      <div class="section-title">💡 Tips for parents</div>
+      <div id="tipsList"></div>
+    </div>
+
+    <!-- Disclaimer -->
+    <div class="disclaimer-box" id="disclaimerBox"></div>
+
+    <!-- Scan again -->
+    <button class="btn-secondary" onclick="resetScanner()">🔄 Scan another product</button>
+
+  </div>
+</div>
+
+<!-- QuaggaJS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<script>
+const AGE_STAGES = {
+  4:"Too young for solids", 5:"Too young for solids",
+  6:"Starting solids", 7:"Early solids",
+  8:"Expanding foods", 9:"Expanding foods",
+  10:"Almost 1 year", 11:"Almost 1 year",
+  12:"1 year old", 14:"Young toddler",
+  16:"Young toddler", 18:"Toddler",
+  20:"Toddler", 22:"Toddler", 24:"2 years old",
+};
+
+let scanning = false;
+let lastBarcode = null;
+
+function updateAgeBadge() {
+  const age = parseInt(document.getElementById("ageSelect").value);
+  document.getElementById("ageBadge").textContent = AGE_STAGES[age] || "";
+}
+
+/* ── Scanner ── */
+function startScanner() {
+  document.getElementById("scannerWrap").style.display = "block";
+  document.getElementById("scanBtn").style.display     = "none";
+  document.getElementById("stopBtn").style.display     = "block";
+  scanning = true;
+
+  Quagga.init({
+    inputStream: {
+      name: "Live",
+      type: "LiveStream",
+      target: document.getElementById("interactive"),
+      constraints: {
+        width:  { min: 640 },
+        height: { min: 480 },
+        facingMode: "environment",
+      },
+    },
+    decoder: {
+      readers: [
+        "ean_reader", "ean_8_reader", "upc_reader",
+        "upc_e_reader", "code_128_reader", "code_39_reader",
+      ],
+    },
+    locate: true,
+  }, err => {
+    if (err) {
+      showError("Could not access camera: " + err.message + ". Use manual entry below.");
+      stopScanner();
+      return;
+    }
+    Quagga.start();
+  });
+
+  Quagga.onDetected(result => {
+    const code = result.codeResult.code;
+    if (code && code !== lastBarcode) {
+      lastBarcode = code;
+      stopScanner();
+      lookupBarcode(code);
+    }
+  });
+}
+
+function stopScanner() {
+  if (scanning) {
+    Quagga.stop();
+    scanning = false;
+  }
+  document.getElementById("scannerWrap").style.display = "none";
+  document.getElementById("scanBtn").style.display     = "block";
+  document.getElementById("stopBtn").style.display     = "none";
+}
+
+/* ── Lookup ── */
+function lookupManual() {
+  const code = document.getElementById("manualBarcode").value.trim().replace(/\s/g, "");
+  if (!code) return;
+  lookupBarcode(code);
+}
+
+async function lookupBarcode(barcode) {
+  const age = document.getElementById("ageSelect").value;
+  document.getElementById("loadingRow").style.display = "block";
+  document.getElementById("results").style.display    = "none";
+  document.getElementById("errorBox").style.display   = "none";
+
+  try {
+    const resp = await fetch(`/api/baby-food-lookup?barcode=${encodeURIComponent(barcode)}&age_months=${age}`);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      if (data.not_found) {
+        showNotFound(barcode);
+      } else {
+        showError(data.error || `HTTP ${resp.status}`);
+      }
+      return;
+    }
+    renderResults(data);
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    document.getElementById("loadingRow").style.display = "none";
+  }
+}
+
+/* ── Render ── */
+function statusIcon(s) {
+  return { safe:"✅", caution:"⚠️", avoid:"🔴" }[s] || "❓";
+}
+
+function renderResults(data) {
+  // Banner
+  const bannerClass = { safe:"banner-safe", caution:"banner-caution", avoid:"banner-avoid" }[data.overall];
+  document.getElementById("overallBanner").className = `overall-banner ${bannerClass}`;
+  document.getElementById("bannerIcon").textContent   = statusIcon(data.overall);
+  document.getElementById("bannerProduct").textContent = `${data.product_name}${data.brand ? " · " + data.brand : ""}`;
+  document.getElementById("bannerTitle").textContent  = {
+    safe:    "✅ Safe for your baby",
+    caution: "⚠️ Use with caution",
+    avoid:   "🔴 Not recommended",
+  }[data.overall];
+  document.getElementById("bannerReason").textContent = data.overall_reason || "";
+  document.getElementById("bannerAge").textContent    = data.age_note || "";
+
+  const img = document.getElementById("productImg");
+  if (data.image_url) {
+    img.src = data.image_url;
+    img.style.display = "block";
+  } else {
+    img.style.display = "none";
+  }
+
+  // Allergens
+  const algCard = document.getElementById("allergensCard");
+  if (data.allergens && data.allergens.length) {
+    document.getElementById("allergensList").innerHTML =
+      data.allergens.map(a => `<span class="allergen-tag">⚠️ ${a}</span>`).join("");
+    algCard.style.display = "block";
+  } else {
+    algCard.style.display = "none";
+  }
+
+  // Ingredients
+  const ingCard = document.getElementById("ingredientsCard");
+  if (data.ingredients && data.ingredients.length) {
+    document.getElementById("ingredientsList").innerHTML = data.ingredients.map(i => `
+      <div class="item-row">
+        <span class="status-icon">${statusIcon(i.status)}</span>
+        <div>
+          <div class="item-name">${i.name}</div>
+          <div class="item-reason">${i.reason}</div>
+        </div>
+      </div>`).join("");
+    ingCard.style.display = "block";
+  } else {
+    ingCard.style.display = "none";
+  }
+
+  // Nutrition
+  const nutCard = document.getElementById("nutritionCard");
+  if (data.nutrition && data.nutrition.length) {
+    document.getElementById("nutritionList").innerHTML = data.nutrition.map(n => `
+      <div class="item-row">
+        <span class="status-icon">${statusIcon(n.status)}</span>
+        <div>
+          <div class="item-name">${n.name} <span style="color:#888;font-weight:400">${n.value}</span></div>
+          <div class="item-reason">${n.reason}</div>
+        </div>
+      </div>`).join("");
+    nutCard.style.display = "block";
+  } else {
+    nutCard.style.display = "none";
+  }
+
+  // Tips
+  const tipsCard = document.getElementById("tipsCard");
+  if (data.tips && data.tips.length) {
+    document.getElementById("tipsList").innerHTML =
+      data.tips.map(t => `<div class="tip-item">💡 ${t}</div>`).join("");
+    tipsCard.style.display = "block";
+  } else {
+    tipsCard.style.display = "none";
+  }
+
+  document.getElementById("disclaimerBox").textContent = data.disclaimer || "";
+
+  const resultsEl = document.getElementById("results");
+  resultsEl.style.display = "flex";
+  resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function showError(msg) {
+  const el = document.getElementById("errorBox");
+  el.className = "error-box";
+  el.innerHTML = `⚠️ ${msg}`;
+  el.style.display = "block";
+}
+
+function showNotFound(barcode) {
+  const el = document.getElementById("errorBox");
+  el.className = "not-found-box";
+  el.innerHTML = `
+    <strong>🔍 Product not found</strong><br>
+    Barcode <code>${barcode}</code> wasn't found in Open Food Facts.<br><br>
+    You can <a href="https://world.openfoodfacts.org/product/${barcode}" target="_blank" rel="noopener" style="color:#7a5c00">add it to Open Food Facts</a> to help other parents too!`;
+  el.style.display = "block";
+}
+
+function resetScanner() {
+  lastBarcode = null;
+  document.getElementById("results").style.display  = "none";
+  document.getElementById("errorBox").style.display = "none";
+  document.getElementById("manualBarcode").value    = "";
+  document.getElementById("inputCard").scrollIntoView({ behavior: "smooth" });
+}
+
+updateAgeBadge();
+</script>
+</body>
+</html>
