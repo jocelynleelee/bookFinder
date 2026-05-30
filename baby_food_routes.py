@@ -329,24 +329,24 @@ def register_baby_food_routes(app: Flask):
             return jsonify({"error": "Invalid age"}), 400
 
         # 1. Check local Superstore database first
-        try:
-            from superstore_db import get_product
-            local = get_product(barcode)
-            if local:
-                local_product = {
-                    "product_name":     local["name"],
-                    "brands":           local["brand"] or "",
-                    "ingredients_text": local["ingredients"] or "",
-                    "nutriments":       local["nutriments"],
-                    "image_url":        local["image_url"] or "",
-                    "allergens_tags":   [],
-                }
-                result = analyze(local_product, age_months)
-                result["barcode"] = barcode
-                result["source"]  = "superstore_db"
-                return jsonify(result)
-        except Exception:
-            pass  # DB not set up yet
+        # try:
+        #     from superstore_db import get_product
+        #     local = get_product(barcode)
+        #     if local:
+        #         local_product = {
+        #             "product_name":     local["name"],
+        #             "brands":           local["brand"] or "",
+        #             "ingredients_text": local["ingredients"] or "",
+        #             "nutriments":       local["nutriments"],
+        #             "image_url":        local["image_url"] or "",
+        #             "allergens_tags":   [],
+        #         }
+        #         result = analyze(local_product, age_months)
+        #         result["barcode"] = barcode
+        #         result["source"]  = "superstore_db"
+        #         return jsonify(result)
+        # except Exception:
+        #     pass  # DB not set up yet
 
         # 2. Fall back to Open Food Facts
         try:
