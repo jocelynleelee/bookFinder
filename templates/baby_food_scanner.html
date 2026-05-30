@@ -635,6 +635,8 @@ function renderResults(data) {
 
   document.getElementById("disclaimerBox").textContent = data.disclaimer || "";
 
+  // Set store search links using the barcode
+
   const resultsEl = document.getElementById("results");
   resultsEl.style.display = "flex";
   resultsEl.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -652,8 +654,27 @@ function showNotFound(barcode) {
   el.className = "not-found-box";
   el.innerHTML = `
     <strong>🔍 Product not found</strong><br>
-    Barcode <code>${barcode}</code> wasn't found in Open Food Facts.<br><br>
-    You can <a href="https://world.openfoodfacts.org/product/${barcode}" target="_blank" rel="noopener" style="color:#7a5c00">add it to Open Food Facts</a> to help other parents too!`;
+    Barcode <code>${barcode}</code> wasn't found in our database.<br><br>
+    <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px">
+      <a href="https://www.walmart.ca/search?q=${barcode}"
+         target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#0071ce;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500">
+        🛒 Search this barcode on Walmart Canada
+      </a>
+      <a href="https://well.ca/search.html?q=${barcode}"
+         target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#e8f4e8;color:#228822;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;border:1px solid #b8ddb8">
+        🌿 Search this barcode on Well.ca
+      </a>
+      <a href="https://world.openfoodfacts.org/product/${barcode}"
+         target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:10px 14px;background:#fff8e1;color:#7a5c00;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;border:1px solid #f0d080">
+        ➕ Add this product to Open Food Facts
+      </a>
+    </div>
+    <div style="font-size:11px;color:#aaa;margin-top:10px">
+      Once you find the product on Walmart or Well.ca, you can use the scraper script to add it to your local database.
+    </div>`;
   el.style.display = "block";
 }
 
