@@ -324,7 +324,7 @@
   <a href="/parks">🌳 Parks</a>
   <a href="/farms">🐄 Farms</a>
   <a href="/events">🎪 Events</a>
-  <a href="/baby-food-scanner" class="active">🍼 Food Scanner</a>
+  <a href="/baby-food-scanner">🍼 Food Scanner</a>
 </nav>
 
 <div class="page-header">
@@ -429,6 +429,11 @@
     <div class="card" id="nutritionCard" style="display:none">
       <div class="section-title">Nutrition flags</div>
       <div id="nutritionList"></div>
+    </div>
+     <!-- daily_limits -->
+    <div class="card" id="dailyLimitsCard" style="display:none">
+      <div class="section-title">Daily limits</div>
+      <div id="dailyLimitsList"></div>
     </div>
 
     <!-- Tips -->
@@ -535,7 +540,10 @@ async function lookupBarcode(barcode) {
   document.getElementById("errorBox").style.display   = "none";
 
   try {
-    const resp = await fetch(`/api/baby-food-lookup?barcode=${encodeURIComponent(barcode)}&age_months=${age}`);
+    const resp = await fetch(
+  `/api/baby-food-lookup?barcode=${encodeURIComponent(barcode)}&age_months=${age}`,
+  { cache: "no-store" }
+);
     const data = await resp.json();
 
     if (!resp.ok) {
@@ -622,6 +630,26 @@ function renderResults(data) {
   } else {
     nutCard.style.display = "none";
   }
+  const dailyLimitsCard = document.getElementById("dailyLimitsCard");
+  const dailyLimitsList = document.getElementById("dailyLimitsList");
+  if (data.daily_limits && Object.keys(data.daily_limits).length > 0) {
+  dailyLimitsList.innerHTML = Object.entries(data.daily_limits)
+    .map(([nutrient, info]) => {
+  console.log(nutrient, info);
+  return `
+    <div class="item-row">
+      <strong>${nutrient}</strong><br>
+      AI: ${info.ai ?? "N/A"} ${info.unit}<br>
+      UL: ${info.ul ?? "N/A"} ${info.unit}<br>
+      <small>${info.note ?? ""}</small>
+    </div>
+  `;
+})
+
+  dailyLimitsCard.style.display = "block";
+} else {
+  dailyLimitsCard.style.display = "none";
+}
 
   // Tips
   const tipsCard = document.getElementById("tipsCard");
