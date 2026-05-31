@@ -52,6 +52,7 @@ def init_db():
             updated_at       TEXT DEFAULT (datetime('now'))
         )
     """)
+    clean_db(conn)
     conn.commit()
     conn.close()
 
@@ -260,6 +261,14 @@ def list_products() -> list[dict]:
     conn.close()
     return [dict(r) for r in rows]
 
+def clean_db(conn):
+    conn.execute("""
+        DELETE FROM baby_products
+        WHERE
+            ingredients IS NULL OR TRIM(ingredients) = '' OR ingredients = '[]'
+            OR nutrition_json IS NULL OR TRIM(nutrition_json) = '' OR nutrition_json = '[]' OR nutrition_json = '{}'
+    """)
+    conn.commit()
 
 # ── CLI helper ─────────────────────────────────────────────────────────────────
 
@@ -279,7 +288,7 @@ if __name__ == "__main__":
 
     # Example: save the sample product from the docstring
     print("Saving sample product...")
-    url = "https://www.realcanadiansuperstore.ca/en/baby/baby-food-snacks/snacks-biscuits/c/30946"
+    url = "https://www.realcanadiansuperstore.ca/en/food/natural-and-organic/c/28189?navid=flyout-L2-Natural-Organic"
     product_ids = get_baby_food_ids(url)
     for product_id in product_ids:
         data = get_superstore_product(product_id)

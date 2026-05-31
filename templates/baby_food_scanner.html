@@ -278,6 +278,78 @@
   }
   .tip-item:last-child { border-bottom: none; }
 
+  /* Nutrition analysis */
+  .nut-item {
+    padding: 10px 0;
+    border-bottom: 0.5px solid #f0f0f0;
+  }
+  .nut-item:last-child { border-bottom: none; }
+  .nut-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 5px;
+  }
+  .nut-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: #222;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .nut-values {
+    font-size: 11px;
+    color: #888;
+    text-align: right;
+    white-space: nowrap;
+  }
+  .nut-bar-wrap {
+    height: 6px;
+    background: #f0f0f0;
+    border-radius: 3px;
+    overflow: hidden;
+    margin: 5px 0;
+  }
+  .nut-bar-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+  }
+  .bar-safe    { background: #3a8a3a; }
+  .bar-caution { background: #b7770d; }
+  .bar-avoid   { background: #c0392b; }
+  .bar-none    { background: #ddd; }
+  .nut-details {
+    display: flex;
+    justify-content: space-between;
+    font-size: 11px;
+    color: #aaa;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin-top: 3px;
+  }
+  .nut-max-servings {
+    font-size: 11px;
+    color: #4a90e2;
+    font-weight: 500;
+    margin-top: 3px;
+  }
+  .nut-no-limit {
+    font-size: 11px;
+    color: #aaa;
+    font-style: italic;
+    margin-top: 2px;
+  }
+  .nut-status-reason {
+    font-size: 11px;
+    font-weight: 500;
+    margin-top: 2px;
+  }
+  .nut-status-reason.caution { color: #b7770d; }
+  .nut-status-reason.avoid   { color: #c0392b; }
+
   .disclaimer-box {
     background: #f9f9f9;
     border: 1px solid #e0e0e0;
@@ -324,7 +396,7 @@
   <a href="/parks">🌳 Parks</a>
   <a href="/farms">🐄 Farms</a>
   <a href="/events">🎪 Events</a>
-  <a href="/baby-food-scanner">🍼 Food Scanner</a>
+  <a href="/baby-food-scanner" class="active">🍼 Food Scanner</a>
 </nav>
 
 <div class="page-header">
@@ -360,6 +432,32 @@
       </select>
       <span class="age-badge" id="ageBadge">Starting solids</span>
     </div>
+
+    <!-- GTIN / Superstore search -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:#aaa;margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em">🛒 Search Real Canadian Superstore by GTIN</div>
+      <div class="manual-row">
+        <input type="number" id="gtinInput" placeholder="Enter GTIN / barcode number..." inputmode="numeric">
+        <button onclick="lookupGtin()">🔍 Search</button>
+      </div>
+    </div>
+
+    <!-- Paste Superstore product data directly -->
+    <div style="margin-bottom:14px">
+      <div style="font-size:12px;color:#aaa;margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:0.04em">📋 Paste Superstore product data</div>
+      <input type="text" id="productNameInput" placeholder="Product name..."
+        style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;margin-bottom:6px;outline:none">
+      <textarea id="ingredientsInput" placeholder="Paste ingredients list..."
+        style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;min-height:70px;resize:vertical;margin-bottom:6px;outline:none"></textarea>
+      <textarea id="nutritionInput" placeholder="Paste nutrition JSON (the list from Superstore API)..."
+        style="width:100%;padding:8px 12px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;min-height:70px;resize:vertical;margin-bottom:6px;outline:none"></textarea>
+      <button onclick="analyzeSuperstoreData()"
+        style="width:100%;padding:9px;background:#4a90e2;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;font-family:inherit;cursor:pointer">
+        🔍 Analyze this product
+      </button>
+    </div>
+
+    <div style="font-size:12px;color:#aaa;margin:10px 0;text-align:center">— or scan a barcode —</div>
 
     <!-- Camera scanner -->
     <div class="scanner-wrap" id="scannerWrap">
@@ -430,11 +528,6 @@
       <div class="section-title">Nutrition flags</div>
       <div id="nutritionList"></div>
     </div>
-     <!-- daily_limits -->
-    <div class="card" id="dailyLimitsCard" style="display:none">
-      <div class="section-title">Daily limits</div>
-      <div id="dailyLimitsList"></div>
-    </div>
 
     <!-- Tips -->
     <div class="card" id="tipsCard" style="display:none">
@@ -444,6 +537,18 @@
 
     <!-- Disclaimer -->
     <div class="disclaimer-box" id="disclaimerBox"></div>
+
+    <!-- Search links -->
+    <div id="searchLinks" style="display:flex;flex-direction:column;gap:6px">
+      <a id="walmartLink" href="#" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#0071ce;color:#fff;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500">
+        🛒 View on Walmart Canada
+      </a>
+      <a id="wellLink" href="#" target="_blank" rel="noopener"
+         style="display:flex;align-items:center;gap:8px;padding:9px 14px;background:#e8f4e8;color:#228822;border-radius:8px;text-decoration:none;font-size:13px;font-weight:500;border:1px solid #b8ddb8">
+        🌿 View on Well.ca
+      </a>
+    </div>
 
     <!-- Scan again -->
     <button class="btn-secondary" onclick="resetScanner()">🔄 Scan another product</button>
@@ -533,6 +638,82 @@ function lookupManual() {
   lookupBarcode(code);
 }
 
+async function analyzeSuperstoreData() {
+  const productName  = document.getElementById("productNameInput").value.trim();
+  const ingredients  = document.getElementById("ingredientsInput").value.trim();
+  const nutritionRaw = document.getElementById("nutritionInput").value.trim();
+  const age          = document.getElementById("ageSelect").value;
+
+  if (!productName && !ingredients) {
+    alert("Please enter at least a product name or ingredients.");
+    return;
+  }
+
+  let nutrition = [];
+  if (nutritionRaw) {
+    try {
+      nutrition = JSON.parse(nutritionRaw);
+      if (!Array.isArray(nutrition)) nutrition = [nutrition];
+    } catch(e) {
+      alert("Invalid nutrition JSON — please paste the raw list from the API.");
+      return;
+    }
+  }
+
+  document.getElementById("loadingRow").style.display = "block";
+  document.getElementById("results").style.display    = "none";
+  document.getElementById("errorBox").style.display   = "none";
+
+  try {
+    const resp = await fetch("/api/superstore-analyze", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({
+        product_name: productName,
+        ingredients:  ingredients,
+        nutrition:    nutrition,
+        age_months:   parseInt(age),
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) { showError(data.error || `HTTP ${resp.status}`); return; }
+    renderResults(data);
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    document.getElementById("loadingRow").style.display = "none";
+  }
+}
+
+async function lookupGtin() {
+  const gtin = document.getElementById("gtinInput").value.trim().replace(/\s/g, "");
+  if (!gtin) return;
+  const age  = document.getElementById("ageSelect").value;
+
+  document.getElementById("loadingRow").style.display = "block";
+  document.getElementById("results").style.display    = "none";
+  document.getElementById("errorBox").style.display   = "none";
+
+  try {
+    const resp = await fetch(`/api/superstore-lookup?gtin=${encodeURIComponent(gtin)}&age_months=${age}`);
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      if (data.not_found) {
+        showNotFound(gtin);
+      } else {
+        showError(data.error || `HTTP ${resp.status}`);
+      }
+      return;
+    }
+    renderResults(data);
+  } catch(e) {
+    showError(e.message);
+  } finally {
+    document.getElementById("loadingRow").style.display = "none";
+  }
+}
+
 async function lookupBarcode(barcode) {
   const age = document.getElementById("ageSelect").value;
   document.getElementById("loadingRow").style.display = "block";
@@ -540,10 +721,7 @@ async function lookupBarcode(barcode) {
   document.getElementById("errorBox").style.display   = "none";
 
   try {
-    const resp = await fetch(
-  `/api/baby-food-lookup?barcode=${encodeURIComponent(barcode)}&age_months=${age}`,
-  { cache: "no-store" }
-);
+    const resp = await fetch(`/api/baby-food-lookup?barcode=${encodeURIComponent(barcode)}&age_months=${age}`);
     const data = await resp.json();
 
     if (!resp.ok) {
@@ -615,41 +793,84 @@ function renderResults(data) {
     ingCard.style.display = "none";
   }
 
-  // Nutrition
+  // Nutrition — new format with daily limits + progress bar
   const nutCard = document.getElementById("nutritionCard");
-  if (data.nutrition && data.nutrition.length) {
-    document.getElementById("nutritionList").innerHTML = data.nutrition.map(n => `
-      <div class="item-row">
-        <span class="status-icon">${statusIcon(n.status)}</span>
-        <div>
-          <div class="item-name">${n.name} <span style="color:#888;font-weight:400">${n.value}</span></div>
-          <div class="item-reason">${n.reason}</div>
+  const nutItems = (data.nutrition || []).filter(n => n.per_serving !== null && n.per_serving !== undefined);
+
+  if (nutItems.length) {
+    document.getElementById("nutritionList").innerHTML = nutItems.map(n => {
+      const icon  = statusIcon(n.status);
+      const hasDailyLimit = n.daily_ul !== null && n.daily_ul !== undefined;
+      const hasAI = n.daily_ai !== null && n.daily_ai !== undefined;
+
+      // Progress bar
+      let pct   = 0;
+      let barClass = "bar-none";
+      if (hasDailyLimit && n.pct_daily !== null) {
+        pct = Math.min(n.pct_daily, 100);
+        barClass = n.status === "avoid" ? "bar-avoid"
+                 : n.status === "caution" ? "bar-caution"
+                 : "bar-safe";
+      }
+
+      // Per serving display
+      const perServing = n.per_serving !== null
+        ? `${n.per_serving}${n.unit}`
+        : `—`;
+
+      // Daily limit display
+      const dailyDisplay = hasDailyLimit
+        ? `Limit: ${n.daily_ul}${n.unit}/day`
+        : hasAI
+        ? `Recommended: ${n.daily_ai}${n.unit}/day`
+        : "";
+
+      // % of daily
+      const pctDisplay = n.pct_daily !== null && (hasDailyLimit || hasAI)
+        ? `${n.pct_daily}% of daily ${hasDailyLimit ? "limit" : "recommended"}`
+        : "";
+
+      // Max servings
+      const maxServingsHtml = (hasDailyLimit && n.max_servings !== null)
+        ? `<div class="nut-max-servings">📊 Max ${n.max_servings} serving${n.max_servings === 1 ? "" : "s"} before daily limit</div>`
+        : "";
+
+      // No limit note
+      const noLimitHtml = (!hasDailyLimit && !hasAI && n.daily_note)
+        ? `<div class="nut-no-limit">${n.daily_note}</div>`
+        : "";
+
+      // Status reason
+      const statusReasonHtml = n.status_reason
+        ? `<div class="nut-status-reason ${n.status}">${n.status_reason}</div>`
+        : "";
+
+      return `<div class="nut-item">
+        <div class="nut-header">
+          <div class="nut-name">${icon} ${n.name}</div>
+          <div class="nut-values">
+            <div><strong>${perServing}</strong> per serving</div>
+            ${dailyDisplay ? `<div>${dailyDisplay}</div>` : ""}
+          </div>
         </div>
-      </div>`).join("");
+        ${(hasDailyLimit || hasAI) ? `
+          <div class="nut-bar-wrap">
+            <div class="nut-bar-fill ${barClass}" style="width:${pct}%"></div>
+          </div>
+          <div class="nut-details">
+            <span>${pctDisplay}</span>
+            <span style="font-style:italic;color:#bbb">${n.daily_note || ""}</span>
+          </div>
+        ` : ""}
+        ${maxServingsHtml}
+        ${noLimitHtml}
+        ${statusReasonHtml}
+      </div>`;
+    }).join("");
     nutCard.style.display = "block";
   } else {
     nutCard.style.display = "none";
   }
-  const dailyLimitsCard = document.getElementById("dailyLimitsCard");
-  const dailyLimitsList = document.getElementById("dailyLimitsList");
-  if (data.daily_limits && Object.keys(data.daily_limits).length > 0) {
-  dailyLimitsList.innerHTML = Object.entries(data.daily_limits)
-    .map(([nutrient, info]) => {
-  console.log(nutrient, info);
-  return `
-    <div class="item-row">
-      <strong>${nutrient}</strong><br>
-      AI: ${info.ai ?? "N/A"} ${info.unit}<br>
-      UL: ${info.ul ?? "N/A"} ${info.unit}<br>
-      <small>${info.note ?? ""}</small>
-    </div>
-  `;
-})
-
-  dailyLimitsCard.style.display = "block";
-} else {
-  dailyLimitsCard.style.display = "none";
-}
 
   // Tips
   const tipsCard = document.getElementById("tipsCard");
@@ -664,6 +885,9 @@ function renderResults(data) {
   document.getElementById("disclaimerBox").textContent = data.disclaimer || "";
 
   // Set store search links using the barcode
+  const barcode = data.barcode || "";
+  document.getElementById("walmartLink").href = `https://www.walmart.ca/search?q=${barcode}`;
+  document.getElementById("wellLink").href    = `https://well.ca/search.html?q=${barcode}`;
 
   const resultsEl = document.getElementById("results");
   resultsEl.style.display = "flex";

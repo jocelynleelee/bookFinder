@@ -246,13 +246,11 @@ def age_stage(age_months: int) -> str:
     return "Toddlers can eat most foods — still supervise for choking hazards."
 
 
-def analyze(product: dict, age_months: int) -> dict:
+def analyze(product: dict, serving_g, age_months: int) -> dict:
     ingredients_text = (product.get("ingredients_text_en") or
                         product.get("ingredients_text") or
                         product.get("ingredients") or "")
     nutriments   = product.get("nutriments", {})
-    serving_g    = product.get("serving_g")  # optional serving size in grams
-
     ing_flags    = check_ingredients(ingredients_text, age_months) if ingredients_text else []
     nut_analysis = build_nutrition_analysis(nutriments, age_months, serving_g)
 
@@ -329,24 +327,30 @@ def register_baby_food_routes(app: Flask):
             return jsonify({"error": "Invalid age"}), 400
 
         # 1. Check local Superstore database first
-        # try:
-        #     from superstore_db import get_product
-        #     local = get_product(barcode)
-        #     if local:
-        #         local_product = {
-        #             "product_name":     local["name"],
-        #             "brands":           local["brand"] or "",
-        #             "ingredients_text": local["ingredients"] or "",
-        #             "nutriments":       local["nutriments"],
-        #             "image_url":        local["image_url"] or "",
-        #             "allergens_tags":   [],
-        #         }
-        #         result = analyze(local_product, age_months)
-        #         result["barcode"] = barcode
-        #         result["source"]  = "superstore_db"
-        #         return jsonify(result)
-        # except Exception:
-        #     pass  # DB not set up yet
+        try:
+            from superstore_db import get_product
+            local = get_product(barcode)
+            nutrition = local["nutrition"]
+            serving_g = None
+            if local:
+                local_product = {
+                    "product_name":     local["name"],
+                    "brands":           local["brand"] or "",
+                    "ingredients_text": local["ingredients"] or "",
+                    "nutriments":       local["nutriments"],
+                    "image_url":        local["image_url"] or "",
+                    "allergens_tags":   [],
+                }
+                if len(nutrition):
+                    serving_g = nutrition[0].get("topNutrition")[0].get("valueInGram")[0]
+                    if serving_g:
+                        serving_g = float(serving_g)
+                result = analyze(local_product, serving_g, age_months)
+                result["barcode"] = barcode
+                result["source"]  = "superstore_db"
+                return jsonify(result)
+        except Exception:
+            pass  # DB not set up yet
 
         # 2. Fall back to Open Food Facts
         try:
@@ -360,8 +364,8 @@ def register_baby_food_routes(app: Flask):
 
         if data.get("status") != 1:
             return jsonify({"error": "Product not found", "barcode": barcode, "not_found": True}), 404
-
-        result = analyze(data.get("product", {}), age_months)
+        per_serving = data.get("product", {}).get("serving_quantity")
+        result = analyze(data.get("product", {}), per_serving, age_months)
         result["barcode"] = barcode
         result["source"]  = "openfoodfacts"
         return jsonify(result)
